@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"net"
 	"time"
-
-	lru "github.com/hashicorp/golang-lru"
 )
 
 // Source represents an inbound UDP socket bound to a session.
@@ -14,7 +12,6 @@ type Source struct {
 	ID      []byte
 	address *net.UDPAddr
 	senders map[*net.UDPAddr]*Sender
-	cache   *lru.Cache
 
 	handshakeTimeout time.Duration
 

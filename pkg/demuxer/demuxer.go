@@ -121,7 +121,10 @@ func (d *Demuxer) GetSource(input *net.UDPConn, output *net.UDPAddr, clientAddr 
 	send := make(chan []byte, 2048)
 	recv := make(chan []byte, 2048)
 	token := make([]byte, 64)
-	rand.Read(token)
+	_, err := rand.Read(token)
+	if err != nil {
+		fmt.Printf("failed to generate random bytes: %v\n", err)
+	}
 	source := &Source{
 		ID:               token,
 		address:          clientAddr,
