@@ -37,6 +37,7 @@ func (source *Source) AddSender(laddr *net.UDPAddr, raddr *net.UDPAddr) {
 	send := make(chan []byte, 2048)
 	conn, err := net.DialUDP("udp", laddr, raddr)
 	if err != nil {
+		fmt.Printf("error dialing %s -> %s\n", laddr, raddr)
 		panic(err)
 	}
 	sender := &Sender{

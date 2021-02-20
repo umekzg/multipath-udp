@@ -33,7 +33,6 @@ func NewMuxer(listen, dial *net.UDPAddr, options ...func(*Muxer)) *Muxer {
 
 	ready := make(chan bool)
 	wg.Add(1)
-	fmt.Printf("initializing\n")
 	go func() {
 		inputConn, err := net.ListenUDP("udp", listen)
 		if err != nil {

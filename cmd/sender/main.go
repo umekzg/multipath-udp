@@ -22,8 +22,8 @@ func showHelp() {
 }
 
 func parse() bool {
-	flag.StringVar(&input, "i", "127.0.0.1:1934", "address to use")
-	flag.StringVar(&output, "o", "127.0.0.1:1936", "address to use")
+	flag.StringVar(&input, "i", "0.0.0.0:1985", "address to use")
+	flag.StringVar(&output, "o", "127.0.0.1:13001", "address to use")
 	help := flag.Bool("h", false, "help info")
 	flag.Parse()
 
@@ -32,27 +32,6 @@ func parse() bool {
 		return false
 	}
 	return true
-}
-
-func localAddresses() ([]*net.UDPAddr, error) {
-	ifaces, err := net.Interfaces()
-	if err != nil {
-		return nil, err
-	}
-	var broadcastAddrs []*net.UDPAddr
-	for _, i := range ifaces {
-		addrs, err := i.Addrs()
-		if err != nil {
-			continue
-		}
-		for _, a := range addrs {
-			switch v := a.(type) {
-			case *net.IPNet:
-				broadcastAddrs = append(broadcastAddrs, &net.UDPAddr{IP: v.IP})
-			}
-		}
-	}
-	return broadcastAddrs, nil
 }
 
 func main() {
@@ -71,7 +50,11 @@ func main() {
 		panic(err)
 	}
 
-	m := demuxer.NewDemuxer(inputAddr, outputAddr)
+	fmt.Printf("listening to %s forwarding to %s\n", inputAddr, outputAddr)
+
+	m := demuxer.NewDemuxer(
+		inputAddr, outputAddr,
+		demuxer.AutoBindInterfaces())
 
 	m.Wait()
 }
