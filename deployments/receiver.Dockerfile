@@ -7,4 +7,4 @@ RUN go build -o /receiver cmd/receiver/main.go
 
 EXPOSE 1985/udp
 
-CMD ["/receiver"]
+ENTRYPOINT ["/receiver"]

@@ -7,4 +7,4 @@ RUN go build -o /sender cmd/sender/main.go
 
 EXPOSE 1935/udp
 
-CMD ["/sender"]
+ENTRYPOINT ["/sender"]
