@@ -35,13 +35,13 @@ func NewDemuxer(listen, dial *net.UDPAddr, options ...func(*Demuxer)) *Demuxer {
 		quit:             make(chan bool),
 		done:             &wg,
 	}
+	wg.Add(1)
 
 	for _, option := range options {
 		option(d)
 	}
 
 	ready := make(chan bool)
-	wg.Add(1)
 	go func() {
 		inputConn, err := net.ListenUDP("udp", listen)
 		if err != nil {
