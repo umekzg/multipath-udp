@@ -29,10 +29,12 @@ type Sender struct {
 	conn *net.UDPConn
 }
 
+// ReceiveMessage notifies the source of a message.
 func (source *Source) ReceiveMessage(b []byte) {
 	source.recv <- b
 }
 
+// AddSender adds a route to raddr via laddr.
 func (source *Source) AddSender(laddr *net.UDPAddr, raddr *net.UDPAddr) {
 	send := make(chan []byte, 2048)
 	conn, err := net.DialUDP("udp", laddr, raddr)
@@ -110,11 +112,13 @@ func (source *Source) AddSender(laddr *net.UDPAddr, raddr *net.UDPAddr) {
 	}()
 }
 
+// Close closes the sender.
 func (sender *Sender) Close() {
 	sender.conn.Close()
 	close(sender.send)
 }
 
+// Close closes the source.
 func (source *Source) Close() {
 	for _, sender := range source.senders {
 		sender.Close()

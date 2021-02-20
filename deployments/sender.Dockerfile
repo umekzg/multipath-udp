@@ -1,9 +1,10 @@
-FROM golang:1.15
+FROM golang:1.16
 
 WORKDIR /go/src/app
 COPY . .
 
-RUN go mod download
-RUN go build -o ./sender cmd/sender/main.go
+RUN go build -o /sender cmd/sender/main.go
 
-CMD ["/go/src/app/sender"]
+EXPOSE 1935/udp
+
+CMD ["/sender"]

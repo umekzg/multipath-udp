@@ -22,8 +22,8 @@ func showHelp() {
 }
 
 func parse() bool {
-	flag.StringVar(&input, "i", "0.0.0.0:1985", "address to use")
-	flag.StringVar(&output, "o", "127.0.0.1:13001", "address to use")
+	flag.StringVar(&input, "i", "0.0.0.0:1935", "address to use")
+	flag.StringVar(&output, "o", "127.0.0.1:1985", "address to use")
 	help := flag.Bool("h", false, "help info")
 	flag.Parse()
 

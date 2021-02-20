@@ -92,7 +92,7 @@ func TestDemuxer_SingleSender(t *testing.T) {
 }
 
 func TestDemuxer_SingleSender_DelayedResponseDuplicateHandshake(t *testing.T) {
-	setUp(t, Handshake(1*time.Millisecond)) // 1ms timeout seems reasonable for the networking stack.
+	setUp(t, HandshakeTimeout(1*time.Millisecond)) // 1ms timeout seems reasonable for the networking stack.
 
 	demuxer.AddInterface(nil)
 

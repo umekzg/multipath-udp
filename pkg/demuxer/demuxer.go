@@ -11,6 +11,7 @@ import (
 	"github.com/segmentio/fasthash/fnv1a"
 )
 
+// Demuxer represents a UDP stream demuxer that demuxes a source over multiple senders.
 type Demuxer struct {
 	sources map[string]*Source
 
@@ -75,35 +76,36 @@ func NewDemuxer(listen, dial *net.UDPAddr, options ...func(*Demuxer)) *Demuxer {
 	return d
 }
 
-func Handshake(t time.Duration) func(*Demuxer) {
-	return func(d *Demuxer) {
-		d.handshakeTimeout = t
-	}
+// Wait waits for the demuxer to exit.
+func (d *Demuxer) Wait() {
+	d.done.Wait()
 }
 
-func (m *Demuxer) Wait() {
-	m.done.Wait()
-}
+// AddInterface adds a given local address networking interface
+func (d *Demuxer) AddInterface(laddr *net.UDPAddr) {
+	fmt.Printf("adding interface %v\n", laddr)
 
-func (m *Demuxer) AddInterface(laddr *net.UDPAddr) {
 	// add the addr to the set of interfaces.
-	m.interfaces[laddr] = true
+	d.interfaces[laddr] = true
 
 	// add it to all existing sources.
-	for _, source := range m.sources {
+	for _, source := range d.sources {
 		if sender, ok := source.senders[laddr]; ok {
 			fmt.Printf("source already exists for addr %s: %v\n", laddr, sender)
 		} else {
-			source.AddSender(laddr, m.output)
+			source.AddSender(laddr, d.output)
 		}
 	}
 }
 
-func (m *Demuxer) RemoveInterface(laddr *net.UDPAddr) {
-	delete(m.interfaces, laddr)
+// RemoveInterface removes a given local address networking interface
+func (d *Demuxer) RemoveInterface(laddr *net.UDPAddr) {
+	fmt.Printf("removing interface %v\n", laddr)
+
+	delete(d.interfaces, laddr)
 
 	// remove it from all existing sources.
-	for _, source := range m.sources {
+	for _, source := range d.sources {
 		if sender, ok := source.senders[laddr]; ok {
 			sender.Close()
 			delete(source.senders, laddr)
@@ -111,6 +113,7 @@ func (m *Demuxer) RemoveInterface(laddr *net.UDPAddr) {
 	}
 }
 
+// GetSource returns the source for a given output address and message source.
 func (d *Demuxer) GetSource(input *net.UDPConn, output *net.UDPAddr, clientAddr *net.UDPAddr) *Source {
 	if source, ok := d.sources[clientAddr.String()]; ok {
 		return source
@@ -180,10 +183,10 @@ func (d *Demuxer) GetSource(input *net.UDPConn, output *net.UDPAddr, clientAddr 
 }
 
 // Close closes all receivers and sinks associated with the muxer, freeing up resources.
-func (m *Demuxer) Close() {
-	for _, source := range m.sources {
+func (d *Demuxer) Close() {
+	for _, source := range d.sources {
 		source.Close()
 	}
-	m.quit <- true
-	m.done.Wait()
+	d.quit <- true
+	d.done.Wait()
 }
