@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net"
 	"os"
+
+	"github.com/muxfd/multipath-udp/pkg/demuxer"
 )
 
 var (
@@ -54,12 +56,6 @@ func localAddresses() ([]*net.UDPAddr, error) {
 }
 
 func main() {
-	broadcastAddrs, err := localAddresses()
-	if err != nil {
-		fmt.Printf("error finding addresses for broadcast: %v\n", err)
-		os.Exit(-1)
-	}
-
 	if !parse() {
 		showHelp()
 		os.Exit(-1)
@@ -67,47 +63,15 @@ func main() {
 
 	inputAddr, err := net.ResolveUDPAddr("udp", input)
 	if err != nil {
-		fmt.Printf("could not resolve address %s: %v\n", input, err)
-		os.Exit(-1)
+		panic(err)
 	}
 
 	outputAddr, err := net.ResolveUDPAddr("udp", output)
 	if err != nil {
-		fmt.Printf("could not resolve output address %s: %v\n", output, err)
-		os.Exit(-1)
+		panic(err)
 	}
 
-	conn, err := net.ListenUDP("udp", inputAddr)
-	if err != nil {
-		fmt.Printf("failed to listen on address %s: %v\n", inputAddr, err)
-		os.Exit(-1)
-	}
+	m := demuxer.NewDemuxer(inputAddr, outputAddr)
 
-	defer conn.Close()
-
-	var dialers []*net.UDPConn
-
-	for _, broadcastAddr := range broadcastAddrs {
-		dialer, err := net.DialUDP("udp", broadcastAddr, outputAddr)
-		if err == nil {
-			defer dialer.Close()
-
-			dialers = append(dialers, dialer)
-		}
-		// it's ok if the dialer creation fails.
-	}
-
-	msg := make([]byte, 2048)
-
-	for {
-		len, _, err := conn.ReadFromUDP(msg)
-		if err != nil {
-			fmt.Printf("failed to read udp packet: %v\n", err)
-			os.Exit(-1)
-		}
-
-		for _, dialer := range dialers {
-			dialer.Write(msg[:len])
-		}
-	}
+	m.Wait()
 }
