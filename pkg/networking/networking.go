@@ -41,19 +41,19 @@ func getAddresses(source func() ([]net.Interface, error)) ([]*net.UDPAddr, error
 	return addrs, nil
 }
 
-func makeSet(s []*net.UDPAddr) map[*net.UDPAddr]bool {
-	m := make(map[*net.UDPAddr]bool)
+func makeSet(s []*net.UDPAddr) map[string]*net.UDPAddr {
+	m := make(map[string]*net.UDPAddr)
 	for _, a := range s {
-		m[a] = true
+		m[a.String()] = a
 	}
 	return m
 }
 
-func diff(a, b map[*net.UDPAddr]bool) []*net.UDPAddr {
+func diff(a, b map[string]*net.UDPAddr) []*net.UDPAddr {
 	var d []*net.UDPAddr
 
-	for x := range a {
-		if !b[x] {
+	for k, x := range a {
+		if _, found := b[k]; !found {
 			d = append(d, x)
 		}
 	}
@@ -87,7 +87,7 @@ func (b *AutoBinder) Bind(add, sub func(*net.UDPAddr)) func() {
 		fmt.Printf("no local addresses found\n")
 	}
 	currAddrSet := makeSet(currAddrs)
-	for iface := range currAddrSet {
+	for _, iface := range currAddrSet {
 		add(iface)
 	}
 	quit := make(chan bool)
