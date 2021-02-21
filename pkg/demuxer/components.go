@@ -54,7 +54,6 @@ func (source *Source) AddSender(laddr *net.UDPAddr, raddr *net.UDPAddr) {
 		_, err := conn.Write(source.ID)
 		if err != nil {
 			fmt.Printf("failed to write handshake address %s: %v\n", raddr, err)
-			return
 		}
 		for {
 			select {
@@ -79,7 +78,6 @@ func (source *Source) AddSender(laddr *net.UDPAddr, raddr *net.UDPAddr) {
 				_, err := conn.Write(source.ID)
 				if err != nil {
 					fmt.Printf("failed to write handshake address %s: %v\n", raddr, err)
-					return
 				}
 			}
 		}
