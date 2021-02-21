@@ -118,6 +118,7 @@ func (d *Demuxer) GetSource(input *net.UDPConn, output *net.UDPAddr, clientAddr 
 	if source, ok := d.sources[clientAddr.String()]; ok {
 		return source
 	}
+	fmt.Printf("new source from addr %v\n", clientAddr)
 	send := make(chan []byte, 2048)
 	recv := make(chan []byte, 2048)
 	token := make([]byte, 64)

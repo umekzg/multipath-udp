@@ -132,6 +132,7 @@ func (m *Muxer) GetReceiver(input *net.UDPConn, output *net.UDPAddr, source *net
 	if sender, ok := m.receivers[source.String()]; ok {
 		return sender
 	}
+	fmt.Printf("new receiver from addr %v\n", source)
 	send := make(chan []byte, 2048)
 	recv := make(chan []byte, 2048)
 	sender := &Receiver{
