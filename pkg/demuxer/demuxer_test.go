@@ -16,8 +16,8 @@ var (
 )
 
 func setUp(t *testing.T, options ...func(*Demuxer)) {
-	input := "127.0.0.1:13000"
-	output := "127.0.0.1:13001"
+	input := "127.0.0.1:13002"
+	output := "127.0.0.1:13003"
 
 	inputAddr, err := net.ResolveUDPAddr("udp", input)
 	if err != nil {

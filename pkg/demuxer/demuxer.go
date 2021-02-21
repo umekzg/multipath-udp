@@ -13,9 +13,9 @@ import (
 
 // Demuxer represents a UDP stream demuxer that demuxes a source over multiple senders.
 type Demuxer struct {
-	sources map[string]*Source
+	sources *SourceMap
 
-	interfaces map[*net.UDPAddr]bool
+	interfaces *InterfaceSet
 	output     *net.UDPAddr
 
 	handshakeTimeout time.Duration
@@ -28,8 +28,8 @@ type Demuxer struct {
 func NewDemuxer(listen, dial *net.UDPAddr, options ...func(*Demuxer)) *Demuxer {
 	var wg sync.WaitGroup
 	d := &Demuxer{
-		sources:          make(map[string]*Source),
-		interfaces:       make(map[*net.UDPAddr]bool),
+		sources:          NewSourceMap(),
+		interfaces:       NewInterfaceSet(),
 		output:           dial,
 		handshakeTimeout: 1 * time.Second,
 		quit:             make(chan bool),
@@ -86,36 +86,25 @@ func (d *Demuxer) AddInterface(laddr *net.UDPAddr) {
 	fmt.Printf("adding interface %v\n", laddr)
 
 	// add the addr to the set of interfaces.
-	d.interfaces[laddr] = true
+	d.interfaces.Add(laddr)
 
 	// add it to all existing sources.
-	for _, source := range d.sources {
-		if sender, ok := source.senders[laddr]; ok {
-			fmt.Printf("source already exists for addr %s: %v\n", laddr, sender)
-		} else {
-			source.AddSender(laddr, d.output)
-		}
-	}
+	d.sources.AddSender(laddr, d.output)
 }
 
 // RemoveInterface removes a given local address networking interface
 func (d *Demuxer) RemoveInterface(laddr *net.UDPAddr) {
 	fmt.Printf("removing interface %v\n", laddr)
 
-	delete(d.interfaces, laddr)
+	d.interfaces.Remove(laddr)
 
 	// remove it from all existing sources.
-	for _, source := range d.sources {
-		if sender, ok := source.senders[laddr]; ok {
-			sender.Close()
-			delete(source.senders, laddr)
-		}
-	}
+	d.sources.CloseAddr(laddr)
 }
 
 // GetSource returns the source for a given output address and message source.
 func (d *Demuxer) GetSource(input *net.UDPConn, output *net.UDPAddr, clientAddr *net.UDPAddr) *Source {
-	if source, ok := d.sources[clientAddr.String()]; ok {
+	if source, ok := d.sources.Get(clientAddr); ok {
 		return source
 	}
 	fmt.Printf("new source from addr %v\n", clientAddr)
@@ -129,15 +118,15 @@ func (d *Demuxer) GetSource(input *net.UDPConn, output *net.UDPAddr, clientAddr 
 	source := &Source{
 		ID:               token,
 		address:          clientAddr,
-		senders:          make(map[*net.UDPAddr]*Sender),
+		senders:          NewSenderMap(),
 		handshakeTimeout: d.handshakeTimeout,
 		send:             send,
 		recv:             recv,
 	}
-	d.sources[clientAddr.String()] = source
+	d.sources.Set(clientAddr, source)
 
 	// bind existing interfaces
-	for laddr := range d.interfaces {
+	for _, laddr := range d.interfaces.GetAll() {
 		source.AddSender(laddr, output)
 	}
 
@@ -150,12 +139,10 @@ func (d *Demuxer) GetSource(input *net.UDPConn, output *net.UDPAddr, clientAddr 
 				break
 			}
 
-			if len(source.senders) == 0 {
+			if source.senders.IsEmpty() {
 				fmt.Printf("no senders available for message %s\n", msg)
 			} else {
-				for _, sender := range source.senders {
-					sender.send <- msg
-				}
+				source.senders.SendAll(msg)
 			}
 		}
 	}()
@@ -188,9 +175,7 @@ func (d *Demuxer) GetSource(input *net.UDPConn, output *net.UDPAddr, clientAddr 
 
 // Close closes all receivers and sinks associated with the muxer, freeing up resources.
 func (d *Demuxer) Close() {
-	for _, source := range d.sources {
-		source.Close()
-	}
+	d.sources.CloseAll()
 	d.quit <- true
 	d.done.Wait()
 }

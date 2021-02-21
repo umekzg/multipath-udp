@@ -11,7 +11,7 @@ import (
 type Source struct {
 	ID      []byte
 	address *net.UDPAddr
-	senders map[*net.UDPAddr]*Sender
+	senders *SenderMap
 
 	handshakeTimeout time.Duration
 
@@ -43,7 +43,7 @@ func (source *Source) AddSender(laddr *net.UDPAddr, raddr *net.UDPAddr) {
 		send: send,
 		conn: conn,
 	}
-	source.senders[laddr] = sender
+	source.senders.Set(laddr, sender)
 
 	// TODO: this negotiation can probably be cleaned up a bit...
 
@@ -117,9 +117,7 @@ func (sender *Sender) Close() {
 
 // Close closes the source.
 func (source *Source) Close() {
-	for _, sender := range source.senders {
-		sender.Close()
-	}
+	source.senders.CloseAll()
 	close(source.send)
 	close(source.recv)
 }

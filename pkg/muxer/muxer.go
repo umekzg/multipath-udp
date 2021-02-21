@@ -10,8 +10,8 @@ import (
 )
 
 type Muxer struct {
-	receivers map[string]*Receiver
-	sinks     map[uint64]*Sink
+	receivers *ReceiverMap
+	sinks     *SinkMap
 
 	quit chan bool
 	done *sync.WaitGroup
@@ -21,8 +21,8 @@ type Muxer struct {
 func NewMuxer(listen, dial *net.UDPAddr, options ...func(*Muxer)) *Muxer {
 	var wg sync.WaitGroup
 	m := &Muxer{
-		receivers: make(map[string]*Receiver),
-		sinks:     make(map[uint64]*Sink),
+		receivers: NewReceiverMap(),
+		sinks:     NewSinkMap(),
 		quit:      make(chan bool),
 		done:      &wg,
 	}
@@ -74,11 +74,10 @@ func (m *Muxer) Wait() {
 
 // GetSink fetches a sink for a specific output address and id.
 func (m *Muxer) GetSink(output *net.UDPAddr, sinkID uint64) *Sink {
-	if sink, ok := m.sinks[sinkID]; ok {
+	if sink, ok := m.sinks.Get(sinkID); ok {
 		return sink
 	}
 	send := make(chan []byte, 2048)
-	receivers := make(map[*Receiver]bool)
 	cache, err := lru.New(10000000)
 	if err != nil {
 		panic(err)
@@ -89,12 +88,12 @@ func (m *Muxer) GetSink(output *net.UDPAddr, sinkID uint64) *Sink {
 	}
 	sink := &Sink{
 		id:        sinkID,
-		receivers: receivers,
+		receivers: NewReceiverSet(),
 		conn:      conn,
 		cache:     cache,
 		send:      send,
 	}
-	m.sinks[sinkID] = sink
+	m.sinks.Set(sinkID, sink)
 
 	// read inbound channel
 	go func() {
@@ -105,9 +104,7 @@ func (m *Muxer) GetSink(output *net.UDPAddr, sinkID uint64) *Sink {
 				fmt.Printf("read error from udp address %s: %v\n", sender, err)
 				break
 			}
-			for sender := range receivers {
-				sender.send <- msg[:n]
-			}
+			sink.receivers.Send(msg[:n])
 		}
 	}()
 
@@ -129,24 +126,24 @@ func (m *Muxer) GetSink(output *net.UDPAddr, sinkID uint64) *Sink {
 }
 
 func (m *Muxer) GetReceiver(input *net.UDPConn, output *net.UDPAddr, source *net.UDPAddr) *Receiver {
-	if sender, ok := m.receivers[source.String()]; ok {
+	if sender, ok := m.receivers.Get(source); ok {
 		return sender
 	}
 	fmt.Printf("new receiver from addr %v\n", source)
 	send := make(chan []byte, 2048)
 	recv := make(chan []byte, 2048)
-	sender := &Receiver{
+	receiver := &Receiver{
 		address: source,
 		send:    send,
 		recv:    recv,
 	}
-	m.receivers[source.String()] = sender
+	m.receivers.Set(source, receiver)
 
 	// msg read loop
 	go func() {
 		var sink *Sink
 		for {
-			msg, ok := <-sender.recv
+			msg, ok := <-receiver.recv
 			if !ok {
 				fmt.Printf("read loop terminated for sender %s\n", source)
 				break
@@ -156,7 +153,7 @@ func (m *Muxer) GetReceiver(input *net.UDPConn, output *net.UDPAddr, source *net
 			if sink == nil || sink.id == hash {
 				// get the sink for the incoming sink id
 				sink = m.GetSink(output, hash)
-				sink.AddSender(sender)
+				sink.receivers.Add(receiver)
 				// respond with the sink id
 				_, err := input.WriteToUDP(msg, source)
 				if err != nil {
@@ -174,7 +171,7 @@ func (m *Muxer) GetReceiver(input *net.UDPConn, output *net.UDPAddr, source *net
 	// msg write loop
 	go func() {
 		for {
-			msg, ok := <-sender.send
+			msg, ok := <-receiver.send
 			if !ok {
 				fmt.Printf("write loop terminated for sender %s\n", source)
 				break
@@ -186,14 +183,12 @@ func (m *Muxer) GetReceiver(input *net.UDPConn, output *net.UDPAddr, source *net
 		}
 	}()
 
-	return sender
+	return receiver
 }
 
 // Close closes all receivers and sinks associated with the muxer, freeing up resources.
 func (m *Muxer) Close() {
-	for _, sink := range m.sinks {
-		sink.Close()
-	}
+	m.sinks.CloseAll()
 	m.quit <- true
 	m.Wait()
 }

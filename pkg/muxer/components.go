@@ -18,18 +18,10 @@ type Receiver struct {
 // Sink represents a multiplexed UDP sink from a single source.
 type Sink struct {
 	id        uint64
-	receivers map[*Receiver]bool
+	receivers *ReceiverSet
 	conn      *net.UDPConn
 	cache     *lru.Cache
 	send      chan []byte
-}
-
-func (sink *Sink) AddSender(receiver *Receiver) {
-	sink.receivers[receiver] = true
-}
-
-func (sink *Sink) RemoveSender(receiver *Receiver) {
-	delete(sink.receivers, receiver)
 }
 
 func (sink *Sink) ReceiveRequest(b []byte) (int, error) {
@@ -40,9 +32,7 @@ func (sink *Sink) ReceiveRequest(b []byte) (int, error) {
 }
 
 func (sink *Sink) Close() {
-	for receiver := range sink.receivers {
-		receiver.Close()
-	}
+	sink.receivers.CloseAll()
 	sink.conn.Close()
 	close(sink.send)
 }
