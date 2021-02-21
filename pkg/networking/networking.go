@@ -3,6 +3,7 @@ package networking
 import (
 	"fmt"
 	"net"
+	"strings"
 	"time"
 )
 
@@ -19,6 +20,10 @@ func getAddresses(source func() ([]net.Interface, error)) ([]*net.UDPAddr, error
 		return nil, err
 	}
 	for _, i := range ifaces {
+		if strings.HasPrefix(i.Name, "docker") {
+			// this is a virtual connection, ignore.
+			continue
+		}
 		ifaceAddrs, err := i.Addrs()
 		if err != nil {
 			fmt.Printf("error getting interface addresses: %v\n", err)
