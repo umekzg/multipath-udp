@@ -109,7 +109,6 @@ func (d *Demuxer) GetSource(input *net.UDPConn, output *net.UDPAddr, clientAddr 
 	}
 	fmt.Printf("new source from addr %v\n", clientAddr)
 	send := make(chan []byte, 2048)
-	recv := make(chan []byte, 2048)
 	token := make([]byte, 64)
 	_, err := rand.Read(token)
 	if err != nil {
@@ -121,7 +120,6 @@ func (d *Demuxer) GetSource(input *net.UDPConn, output *net.UDPAddr, clientAddr 
 		senders:          NewSenderMap(),
 		handshakeTimeout: d.handshakeTimeout,
 		send:             send,
-		recv:             recv,
 	}
 	d.sources.Set(clientAddr, source)
 
@@ -129,23 +127,6 @@ func (d *Demuxer) GetSource(input *net.UDPConn, output *net.UDPAddr, clientAddr 
 	for _, laddr := range d.interfaces.GetAll() {
 		source.AddSender(laddr, output)
 	}
-
-	// msg read loop
-	go func() {
-		for {
-			msg, ok := <-source.recv
-			if !ok {
-				fmt.Printf("read loop terminated for sender %v\n", source)
-				break
-			}
-
-			if source.senders.IsEmpty() {
-				fmt.Printf("no senders available for message %s\n", msg)
-			} else {
-				source.senders.SendAll(msg)
-			}
-		}
-	}()
 
 	// msg write loop
 	go func() {

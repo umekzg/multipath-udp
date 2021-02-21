@@ -16,7 +16,6 @@ type Source struct {
 	handshakeTimeout time.Duration
 
 	send chan []byte // unprocessed messages from the sender.
-	recv chan []byte
 }
 
 // Sender represents a multiplexed UDP session from a single source.
@@ -28,7 +27,7 @@ type Sender struct {
 
 // ReceiveMessage notifies the source of a message.
 func (source *Source) ReceiveMessage(b []byte) {
-	source.recv <- b
+	source.senders.SendAll(b)
 }
 
 // AddSender adds a route to raddr via laddr.
@@ -117,5 +116,4 @@ func (sender *Sender) Close() {
 func (source *Source) Close() {
 	source.senders.CloseAll()
 	close(source.send)
-	close(source.recv)
 }

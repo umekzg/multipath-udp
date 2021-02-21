@@ -1,6 +1,7 @@
 package demuxer
 
 import (
+	"fmt"
 	"net"
 	"sync"
 )
@@ -28,13 +29,14 @@ func (s *SenderMap) Set(addr *net.UDPAddr, sender *Sender) {
 }
 
 func (s *SenderMap) IsEmpty() bool {
-	s.RLock()
-	defer s.RUnlock()
 	return len(s.senders) == 0
 }
 
 func (s *SenderMap) SendAll(msg []byte) {
 	s.RLock()
+	if len(s.senders) == 0 {
+		fmt.Printf("no senders available\n")
+	}
 	for _, sender := range s.senders {
 		sender.send <- msg
 	}
