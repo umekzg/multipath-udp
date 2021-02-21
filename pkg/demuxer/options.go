@@ -20,7 +20,9 @@ func AutoBindInterfaces() func(*Demuxer) {
 	binder := networking.NewAutoBinder(net.Interfaces, 3*time.Second)
 	return func(d *Demuxer) {
 		close := binder.Bind(d.AddInterface, d.RemoveInterface)
-		d.Wait()
-		close()
+		go func() {
+			d.Wait()
+			close()
+		}()
 	}
 }
