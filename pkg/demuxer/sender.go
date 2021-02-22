@@ -7,31 +7,14 @@ import (
 	"time"
 )
 
-// Source represents an inbound UDP socket bound to a session.
-type Source struct {
-	ID      []byte
-	address *net.UDPAddr
-	senders *SenderMap
-
-	handshakeTimeout time.Duration
-
-	send chan []byte // unprocessed messages from the sender.
-}
-
 // Sender represents a multiplexed UDP session from a single source.
 type Sender struct {
 	send chan []byte
-
 	conn *net.UDPConn
 }
 
-// ReceiveMessage notifies the source of a message.
-func (source *Source) ReceiveMessage(b []byte) {
-	source.senders.SendAll(b)
-}
-
 // AddSender adds a route to raddr via laddr.
-func (source *Source) AddSender(laddr *net.UDPAddr, raddr *net.UDPAddr) {
+func NewSender(session []byte, laddr, raddr *net.UDPAddr, onResponse func([]byte), handshakeTimeout time.Duration) *Sender {
 	send := make(chan []byte, 2048)
 	conn, err := net.DialUDP("udp", laddr, raddr)
 	if err != nil {
@@ -42,7 +25,6 @@ func (source *Source) AddSender(laddr *net.UDPAddr, raddr *net.UDPAddr) {
 		send: send,
 		conn: conn,
 	}
-	source.senders.Set(laddr, sender)
 
 	// TODO: this negotiation can probably be cleaned up a bit...
 
@@ -50,7 +32,7 @@ func (source *Source) AddSender(laddr *net.UDPAddr, raddr *net.UDPAddr) {
 	successfulHandshake := make(chan bool)
 	go func() {
 		// write the initial handshake immediately.
-		_, err := conn.Write(source.ID)
+		_, err := conn.Write(session)
 		if err != nil {
 			fmt.Printf("failed to write handshake address %s: %v\n", raddr, err)
 		}
@@ -73,8 +55,8 @@ func (source *Source) AddSender(laddr *net.UDPAddr, raddr *net.UDPAddr) {
 				}()
 				close(successfulHandshake)
 				return
-			case <-time.After(source.handshakeTimeout):
-				_, err := conn.Write(source.ID)
+			case <-time.After(handshakeTimeout):
+				_, err := conn.Write(session)
 				if err != nil {
 					fmt.Printf("failed to write handshake address %s: %v\n", raddr, err)
 				}
@@ -93,27 +75,28 @@ func (source *Source) AddSender(laddr *net.UDPAddr, raddr *net.UDPAddr) {
 				break
 			}
 			if !handshakeReceived {
-				if !bytes.Equal(msg[:n], source.ID) {
+				if !bytes.Equal(msg[:n], session) {
 					fmt.Printf("invalid handshake from udp address %s: %v\n", raddr, msg[:n])
 				} else {
 					handshakeReceived = true
 					successfulHandshake <- true
 				}
 			} else {
-				source.send <- msg[:n]
+				onResponse(msg[:n])
 			}
 		}
 	}()
+
+	return sender
+}
+
+func (sender *Sender) Write(msg []byte) (n int, err error) {
+	sender.send <- msg
+	return len(msg), nil
 }
 
 // Close closes the sender.
 func (sender *Sender) Close() {
 	sender.conn.Close()
 	close(sender.send)
-}
-
-// Close closes the source.
-func (source *Source) Close() {
-	source.senders.CloseAll()
-	close(source.send)
 }
