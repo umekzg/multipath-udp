@@ -19,7 +19,7 @@ func HandshakeTimeout(t time.Duration) func(*Demuxer) {
 func AutoBindInterfaces() func(*Demuxer) {
 	binder := networking.NewAutoBinder(net.Interfaces, 3*time.Second)
 	return func(d *Demuxer) {
-		close := binder.Bind(d.AddInterface, d.RemoveInterface)
+		close := binder.Bind(d.interfaces.Add, d.interfaces.Remove)
 		go func() {
 			d.Wait()
 			close()

@@ -52,7 +52,6 @@ func NewDemuxer(listen, dial *net.UDPAddr, options ...func(*Demuxer)) *Demuxer {
 
 	go func() {
 		defer wg.Done()
-		cache, err := lru.New(10000000)
 		if err != nil {
 			panic(err)
 		}
@@ -115,21 +114,6 @@ func (d *Demuxer) IsDuplicateMessage(session string, msg []byte) bool {
 // Wait waits for the demuxer to exit.
 func (d *Demuxer) Wait() {
 	d.done.Wait()
-}
-
-// AddInterface adds a given local address networking interface
-func (d *Demuxer) AddInterface(laddr *net.UDPAddr) {
-	fmt.Printf("adding interface %v\n", laddr)
-
-	// add the addr to the set of interfaces.
-	d.interfaces.Add(laddr)
-}
-
-// RemoveInterface removes a given local address networking interface
-func (d *Demuxer) RemoveInterface(laddr *net.UDPAddr) {
-	fmt.Printf("removing interface %v\n", laddr)
-
-	d.interfaces.Remove(laddr)
 }
 
 // Close closes all receivers and sinks associated with the muxer, freeing up resources.
