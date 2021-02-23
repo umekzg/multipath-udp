@@ -60,6 +60,7 @@ func NewDemuxer(listen, dial *net.UDPAddr, options ...func(*Demuxer)) *Demuxer {
 
 			n, senderAddr, err := conn.ReadFromUDP(msg)
 			if err != nil {
+				fmt.Printf("error reading %v\n", err)
 				break
 			}
 
