@@ -33,6 +33,8 @@ func NewDemuxer(listen, dial *net.UDPAddr, options ...func(*Demuxer)) *Demuxer {
 	if err != nil {
 		panic(err)
 	}
+	conn.SetReadBuffer(1024 * 1024)
+	conn.SetWriteBuffer(1024 * 1024)
 	var wg sync.WaitGroup
 	d := &Demuxer{
 		senders:          make(map[string]*Sender),
@@ -57,7 +59,6 @@ func NewDemuxer(listen, dial *net.UDPAddr, options ...func(*Demuxer)) *Demuxer {
 		}
 		for {
 			msg := make([]byte, 2048)
-
 			n, senderAddr, err := conn.ReadFromUDP(msg)
 			if err != nil {
 				fmt.Printf("error reading %v\n", err)

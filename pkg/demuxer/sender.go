@@ -21,6 +21,8 @@ func NewSender(session []byte, laddr, raddr *net.UDPAddr, onResponse func([]byte
 		fmt.Printf("error dialing %s -> %s\n", laddr, raddr)
 		panic(err)
 	}
+	conn.SetReadBuffer(1024 * 1024)
+	conn.SetWriteBuffer(1024 * 1024)
 	sender := &Sender{
 		send: send,
 		conn: conn,
@@ -66,8 +68,8 @@ func NewSender(session []byte, laddr, raddr *net.UDPAddr, onResponse func([]byte
 	// read inbound channel
 	go func() {
 		handshakeReceived := false
+		msg := make([]byte, 2048)
 		for {
-			msg := make([]byte, 2048)
 			n, _, err := conn.ReadFromUDP(msg)
 			if err != nil {
 				break
@@ -93,7 +95,6 @@ func NewSender(session []byte, laddr, raddr *net.UDPAddr, onResponse func([]byte
 
 func (sender *Sender) Write(msg []byte) (n int, err error) {
 	sender.send <- msg
-	fmt.Printf("writing msg %v\n", msg)
 	return len(msg), nil
 }
 

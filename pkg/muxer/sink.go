@@ -14,6 +14,8 @@ func NewSink(output *net.UDPAddr, onReceive func([]byte)) *Sink {
 	if err != nil {
 		panic(err)
 	}
+	conn.SetReadBuffer(1024 * 1024)
+	conn.SetWriteBuffer(1024 * 1024)
 	sink := &Sink{conn: conn}
 
 	// read inbound channel

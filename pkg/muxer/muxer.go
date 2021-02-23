@@ -26,6 +26,8 @@ func NewMuxer(listen, dial *net.UDPAddr, options ...func(*Muxer)) *Muxer {
 	if err != nil {
 		panic(err)
 	}
+	conn.SetReadBuffer(1024 * 1024)
+	conn.SetWriteBuffer(1024 * 1024)
 	var wg sync.WaitGroup
 	m := &Muxer{
 		sessions:     NewAddrToSessionMap(),
