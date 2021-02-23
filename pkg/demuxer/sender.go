@@ -93,6 +93,7 @@ func NewSender(session []byte, laddr, raddr *net.UDPAddr, onResponse func([]byte
 
 func (sender *Sender) Write(msg []byte) (n int, err error) {
 	sender.send <- msg
+	fmt.Printf("writing msg %v\n", msg)
 	return len(msg), nil
 }
 
