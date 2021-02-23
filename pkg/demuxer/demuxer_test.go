@@ -80,7 +80,7 @@ func expectRead(t *testing.T, conn *net.UDPConn, want []byte) *net.UDPAddr {
 func TestDemuxer_SingleSender(t *testing.T) {
 	setUp(t)
 
-	demuxer.AddInterface(nil)
+	demuxer.interfaces.Add(nil)
 
 	inputConn.Write([]byte("mooogit test"))
 
@@ -94,7 +94,7 @@ func TestDemuxer_SingleSender(t *testing.T) {
 func TestDemuxer_SingleSender_DelayedResponseDuplicateHandshake(t *testing.T) {
 	setUp(t, HandshakeTimeout(1*time.Millisecond)) // 1ms timeout seems reasonable for the networking stack.
 
-	demuxer.AddInterface(nil)
+	demuxer.interfaces.Add(nil)
 
 	inputConn.Write([]byte("mooogit test"))
 
@@ -123,7 +123,7 @@ func TestDemuxer_SingleSender_DelayedResponseDuplicateHandshake(t *testing.T) {
 func TestDemuxer_SingleSender_MultipleMessages(t *testing.T) {
 	setUp(t)
 
-	demuxer.AddInterface(nil)
+	demuxer.interfaces.Add(nil)
 
 	inputConn.Write([]byte("mooogit test 1"))
 	inputConn.Write([]byte("mooogit test 2"))
@@ -141,7 +141,7 @@ func TestDemuxer_SingleSender_MultipleMessages(t *testing.T) {
 func TestDemuxer_SingleSender_ForwardsResponse(t *testing.T) {
 	setUp(t)
 
-	demuxer.AddInterface(nil)
+	demuxer.interfaces.Add(nil)
 
 	inputConn.Write([]byte("mooogit test 1"))
 

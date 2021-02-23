@@ -8,8 +8,7 @@ import (
 	"sync"
 	"time"
 
-	lru "github.com/hashicorp/golang-lru"
-	"github.com/segmentio/fasthash/fnv1a"
+	"github.com/muxfd/multipath-udp/pkg/networking"
 )
 
 // Demuxer represents a UDP stream demuxer that demuxes a source over multiple senders.
@@ -17,7 +16,7 @@ type Demuxer struct {
 	senders  map[string]*Sender
 	sessions map[string][]byte
 
-	caches map[string]*lru.Cache
+	deduplicator *networking.PacketDeduplicator
 
 	conn *net.UDPConn
 
@@ -38,6 +37,7 @@ func NewDemuxer(listen, dial *net.UDPAddr, options ...func(*Demuxer)) *Demuxer {
 	d := &Demuxer{
 		senders:          make(map[string]*Sender),
 		sessions:         make(map[string][]byte),
+		deduplicator:     networking.NewPacketDeduplicator(),
 		conn:             conn,
 		interfaces:       NewInterfaceSet(),
 		handshakeTimeout: 1 * time.Second,
@@ -71,7 +71,7 @@ func NewDemuxer(listen, dial *net.UDPAddr, options ...func(*Demuxer)) *Demuxer {
 				sender, ok := d.senders[key]
 				if !ok {
 					sender = NewSender(session, iface, dial, func(msg []byte) {
-						if !d.IsDuplicateMessage(hex.EncodeToString(session), msg[:n]) {
+						if !d.deduplicator.Receive(hex.EncodeToString(session), msg[:n]) {
 							conn.WriteToUDP(msg, senderAddr)
 						}
 					}, d.handshakeTimeout)
@@ -96,19 +96,6 @@ func (d *Demuxer) GetSession(addr *net.UDPAddr) []byte {
 	}
 	d.sessions[addr.String()] = token
 	return token
-}
-
-func (d *Demuxer) IsDuplicateMessage(session string, msg []byte) bool {
-	cache, ok := d.caches[session]
-	if !ok {
-		cache, err := lru.New(10000000)
-		if err != nil {
-			panic(err)
-		}
-		d.caches[session] = cache
-	}
-	found, _ := cache.ContainsOrAdd(fnv1a.HashBytes64(msg), true)
-	return found
 }
 
 // Wait waits for the demuxer to exit.

@@ -74,7 +74,7 @@ func expectRead(t *testing.T, conn *net.UDPConn, want []byte) *net.UDPAddr {
 	if err != nil {
 		t.Errorf("received error from udp address %s: %v\n", sender, err)
 	} else if !bytes.Equal(msg[:n], want) {
-		t.Errorf("received incorrect response: %s", string(msg[:n]))
+		t.Errorf("received incorrect read: %s vs %s", msg[:n], want)
 	}
 	return sender
 }
