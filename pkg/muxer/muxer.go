@@ -48,13 +48,13 @@ func NewMuxer(listen, dial *net.UDPAddr, options ...func(*Muxer)) *Muxer {
 
 			n, senderAddr, err := conn.ReadFromUDP(msg)
 			if err != nil {
-				fmt.Printf("input conn read failed %v: %v\n", conn, err)
 				break
 			}
 
 			session, ok := m.sessions.GetSession(senderAddr)
 			if !ok {
 				// this is a new session, so the inbound message is the session id.
+				fmt.Printf("new session from %v with handshake %v\n", senderAddr, msg[:n])
 				session = msg[:n]
 				m.sessions.Set(senderAddr, session)
 				conn.WriteToUDP(session, senderAddr)
@@ -62,8 +62,10 @@ func NewMuxer(listen, dial *net.UDPAddr, options ...func(*Muxer)) *Muxer {
 				m.deduplicator.Receive(hex.EncodeToString(session), msg[:n])
 				continue
 			} else if bytes.Equal(msg[:n], session) {
-				// duplicate handshake, just respond until it's successful.
+				// duplicate handshake, respond until it's successful.
+				fmt.Printf("duplicate handshake received\n")
 				conn.WriteToUDP(session, senderAddr)
+				continue
 			}
 
 			// forward this message to the sink for the session.

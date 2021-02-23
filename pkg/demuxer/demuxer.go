@@ -60,7 +60,6 @@ func NewDemuxer(listen, dial *net.UDPAddr, options ...func(*Demuxer)) *Demuxer {
 
 			n, senderAddr, err := conn.ReadFromUDP(msg)
 			if err != nil {
-				fmt.Printf("input conn read failed %v: %v\n", conn, err)
 				break
 			}
 
@@ -70,6 +69,7 @@ func NewDemuxer(listen, dial *net.UDPAddr, options ...func(*Demuxer)) *Demuxer {
 				key := fmt.Sprintf("%s-%s-%s", hex.EncodeToString(session), iface, dial)
 				sender, ok := d.senders[key]
 				if !ok {
+					fmt.Printf("new sender over %v with handshake %v\n", iface, session)
 					sender = NewSender(session, iface, dial, func(msg []byte) {
 						if !d.deduplicator.Receive(hex.EncodeToString(session), msg[:n]) {
 							conn.WriteToUDP(msg, senderAddr)

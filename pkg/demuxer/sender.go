@@ -44,7 +44,6 @@ func NewSender(session []byte, laddr, raddr *net.UDPAddr, onResponse func([]byte
 					for {
 						msg, ok := <-send
 						if !ok {
-							fmt.Printf("write loop closed for sender %v %v\n", laddr, raddr)
 							break
 						}
 						_, err := conn.Write(msg)
@@ -69,20 +68,22 @@ func NewSender(session []byte, laddr, raddr *net.UDPAddr, onResponse func([]byte
 		handshakeReceived := false
 		for {
 			msg := make([]byte, 2048)
-			n, muxer, err := conn.ReadFromUDP(msg)
+			n, _, err := conn.ReadFromUDP(msg)
 			if err != nil {
-				fmt.Printf("read error from udp address %s: %v\n", muxer, err)
 				break
 			}
+			isHandshake := bytes.Equal(msg[:n], session)
 			if !handshakeReceived {
-				if !bytes.Equal(msg[:n], session) {
+				if !isHandshake {
 					fmt.Printf("invalid handshake from udp address %s: %v\n", raddr, msg[:n])
 				} else {
 					handshakeReceived = true
 					successfulHandshake <- true
 				}
-			} else {
+			} else if !isHandshake {
 				onResponse(msg[:n])
+			} else {
+				fmt.Printf("duplicate handshake received\n")
 			}
 		}
 	}()
