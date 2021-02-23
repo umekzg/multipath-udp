@@ -1,6 +1,7 @@
 package demuxer
 
 import (
+	"fmt"
 	"net"
 	"sync"
 )
@@ -23,12 +24,14 @@ func getKey(addr *net.UDPAddr) string {
 }
 
 func (i *InterfaceSet) Add(addr *net.UDPAddr) {
+	fmt.Printf("adding interface %v\n", addr)
 	i.Lock()
 	i.interfaces[getKey(addr)] = addr
 	i.Unlock()
 }
 
 func (i *InterfaceSet) Remove(addr *net.UDPAddr) {
+	fmt.Printf("removing interface %v\n", addr)
 	i.Lock()
 	delete(i.interfaces, getKey(addr))
 	i.Unlock()
