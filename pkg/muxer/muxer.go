@@ -79,7 +79,10 @@ func NewMuxer(listen, dial *net.UDPAddr, options ...func(*Muxer)) *Muxer {
 
 			// forward this message to the sink for the session.
 			key := hex.EncodeToString(session)
-			if true || !m.deduplicator.Receive(key, msg[:n]) {
+			if !m.deduplicator.Receive(key, msg[:n]) {
+				fmt.Printf("duplicate packet\n")
+			}
+			if true {
 				sink, ok := m.sinks[key]
 				if !ok {
 					sink = NewSink(dial, func(msg []byte) {
