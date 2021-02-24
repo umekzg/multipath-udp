@@ -7,13 +7,13 @@ import (
 	"time"
 )
 
-func tryDial(addr *net.UDPAddr) bool {
-	d := net.Dialer{LocalAddr: addr, Timeout: 5 * time.Second}
-	_, err := d.Dial("udp", "8.8.8.8:53")
+func tryDial(laddr *net.UDPAddr, raddr string) bool {
+	d := net.Dialer{LocalAddr: laddr, Timeout: 5 * time.Second}
+	_, err := d.Dial("udp", raddr)
 	return err == nil
 }
 
-func getAddresses(source func() ([]net.Interface, error)) ([]*net.UDPAddr, error) {
+func getAddresses(source func() ([]net.Interface, error), raddr string) ([]*net.UDPAddr, error) {
 	var addrs []*net.UDPAddr
 	ifaces, err := source()
 	if err != nil {
@@ -33,11 +33,11 @@ func getAddresses(source func() ([]net.Interface, error)) ([]*net.UDPAddr, error
 			switch v := a.(type) {
 			case *net.IPNet:
 				addr := &net.UDPAddr{IP: v.IP}
-				if tryDial(addr) {
+				if tryDial(addr, raddr) {
 					addrs = append(addrs, addr)
 				}
 			case *net.UDPAddr:
-				if tryDial(v) {
+				if tryDial(v, raddr) {
 					addrs = append(addrs, v)
 				}
 			}
@@ -83,8 +83,8 @@ func NewAutoBinder(source func() ([]net.Interface, error), pollPeriod time.Durat
 
 // Bind begins binding the AutoBinder to the two difference functions,
 // calling add when a new interface is added and sub when an interface is removed.
-func (b *AutoBinder) Bind(add, sub func(*net.UDPAddr)) func() {
-	currAddrs, err := getAddresses(b.source)
+func (b *AutoBinder) Bind(add, sub func(*net.UDPAddr), raddr string) func() {
+	currAddrs, err := getAddresses(b.source, raddr)
 	if err != nil {
 		fmt.Printf("error fetching local addresses: %v\n", err)
 		currAddrs = []*net.UDPAddr{}
@@ -103,7 +103,7 @@ func (b *AutoBinder) Bind(add, sub func(*net.UDPAddr)) func() {
 			case <-quit:
 				return
 			case <-time.After(b.pollPeriod):
-				nextAddrs, err := getAddresses(b.source)
+				nextAddrs, err := getAddresses(b.source, raddr)
 				if err != nil {
 					fmt.Printf("error fetching local addresses: %v\n", err)
 					break

@@ -16,10 +16,10 @@ func HandshakeTimeout(t time.Duration) func(*Demuxer) {
 
 // AutoBindInterfaces adds a network interface listener to automatically
 // add or remove network interfaces.
-func AutoBindInterfaces() func(*Demuxer) {
+func AutoBindInterfaces(raddr string) func(*Demuxer) {
 	binder := networking.NewAutoBinder(net.Interfaces, 3*time.Second)
 	return func(d *Demuxer) {
-		close := binder.Bind(d.interfaces.Add, d.interfaces.Remove)
+		close := binder.Bind(d.interfaces.Add, d.interfaces.Remove, raddr)
 		go func() {
 			d.Wait()
 			close()

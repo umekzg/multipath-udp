@@ -77,6 +77,63 @@ func expectRead(t *testing.T, conn *net.UDPConn, want []byte) *net.UDPAddr {
 	return sender
 }
 
+func BenchmarkDemuxer(b *testing.B) {
+	input := "127.0.0.1:13002"
+	output := "127.0.0.1:13003"
+
+	inputAddr, err := net.ResolveUDPAddr("udp", input)
+	if err != nil {
+		b.Errorf("failed to resolve %s: %v", input, err)
+		return
+	}
+
+	outputAddr, err := net.ResolveUDPAddr("udp", output)
+	if err != nil {
+		b.Errorf("failed to resolve %s: %v", output, err)
+		return
+	}
+
+	demuxer = NewDemuxer(inputAddr, outputAddr)
+
+	inputConn, err = net.DialUDP("udp", nil, inputAddr)
+	if err != nil {
+		b.Errorf("failed to dial %s: %v", inputAddr, err)
+		return
+	}
+
+	outputConn, err = net.ListenUDP("udp", outputAddr)
+	if err != nil {
+		b.Errorf("failed to listen %s: %v", outputAddr, err)
+		return
+	}
+
+	demuxer.interfaces.Add(nil)
+
+	inputConn.Write([]byte("mooogit test"))
+
+	msg := make([]byte, 4096)
+	n, sender, err := outputConn.ReadFromUDP(msg)
+	if err != nil {
+		b.Errorf("received error from udp address %s: %v\n", sender, err)
+	}
+	_, err = outputConn.WriteToUDP(msg[:n], sender)
+	if err != nil {
+		b.Errorf("received error returning handshake from udp address %s: %v\n", sender, err)
+	}
+
+	for i := 0; i < b.N; i++ {
+		inputConn.Write([]byte("packet mooooo"))
+		_, sender, err := outputConn.ReadFromUDP(msg)
+		if err != nil {
+			b.Errorf("received error from udp address %s: %v\n", sender, err)
+		}
+	}
+
+	demuxer.Close()
+	outputConn.Close()
+	inputConn.Close()
+}
+
 func TestDemuxer_SingleSender(t *testing.T) {
 	setUp(t)
 

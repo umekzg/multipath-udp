@@ -54,7 +54,7 @@ func main() {
 
 	m := demuxer.NewDemuxer(
 		inputAddr, outputAddr,
-		demuxer.AutoBindInterfaces())
+		demuxer.AutoBindInterfaces(output))
 
 	m.Wait()
 }
