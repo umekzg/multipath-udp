@@ -73,9 +73,9 @@ func NewDemuxer(listen, dial *net.UDPAddr, options ...func(*Demuxer)) *Demuxer {
 				if !ok {
 					fmt.Printf("new sender over %v with handshake %v\n", iface, session)
 					sender = NewSender(session, iface, dial, func(msg []byte) {
-						if !d.deduplicator.Receive(hex.EncodeToString(session), msg[:n]) {
-							conn.WriteToUDP(msg, senderAddr)
-						}
+						// if !d.deduplicator.Receive(hex.EncodeToString(session), msg[:n]) {
+						conn.WriteToUDP(msg, senderAddr)
+						// }
 					}, d.handshakeTimeout)
 					d.senders[key] = sender
 				}
