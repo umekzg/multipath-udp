@@ -65,7 +65,7 @@ func NewMuxer(listen, dial *net.UDPAddr, options ...func(*Muxer)) *Muxer {
 					fmt.Printf("error writing handshake response %v", err)
 				}
 				// prevent it from being written to the sink.
-				m.deduplicator.Receive(hex.EncodeToString(session), msg[:n])
+				// m.deduplicator.Receive(hex.EncodeToString(session), msg[:n])
 				continue
 			} else if bytes.Equal(msg[:n], session) {
 				// duplicate handshake, respond until it's successful.
@@ -79,19 +79,19 @@ func NewMuxer(listen, dial *net.UDPAddr, options ...func(*Muxer)) *Muxer {
 
 			// forward this message to the sink for the session.
 			key := hex.EncodeToString(session)
-			if !m.deduplicator.Receive(key, msg[:n]) {
-				sink, ok := m.sinks[key]
-				if !ok {
-					sink = NewSink(dial, func(msg []byte) {
-						// forward this message to all senders with the same session id as this one.
-						for _, sender := range m.sessions.GetUDPAddrs(session) {
-							conn.WriteToUDP(msg, sender)
-						}
-					})
-					m.sinks[key] = sink
-				}
-				sink.Write(msg[:n])
+			// if !m.deduplicator.Receive(key, msg[:n]) {
+			sink, ok := m.sinks[key]
+			if !ok {
+				sink = NewSink(dial, func(msg []byte) {
+					// forward this message to all senders with the same session id as this one.
+					for _, sender := range m.sessions.GetUDPAddrs(session) {
+						conn.WriteToUDP(msg, sender)
+					}
+				})
+				m.sinks[key] = sink
 			}
+			sink.Write(msg[:n])
+			// }
 		}
 	}()
 	return m
