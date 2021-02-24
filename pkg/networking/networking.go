@@ -20,8 +20,9 @@ func getAddresses(source func() ([]net.Interface, error), raddr string) ([]*net.
 		return nil, err
 	}
 	for _, i := range ifaces {
-		if strings.HasPrefix(i.Name, "docker") {
-			// this is a virtual connection, ignore.
+		if !strings.HasPrefix(i.Name, "usb") {
+			// only consider usb connections.
+			// TODO: make this configurable.
 			continue
 		}
 		ifaceAddrs, err := i.Addrs()
