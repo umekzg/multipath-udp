@@ -79,7 +79,7 @@ func NewMuxer(listen, dial *net.UDPAddr, options ...func(*Muxer)) *Muxer {
 
 			// forward this message to the sink for the session.
 			key := hex.EncodeToString(session)
-			if !m.deduplicator.Receive(key, msg[:n]) {
+			if true || !m.deduplicator.Receive(key, msg[:n]) {
 				sink, ok := m.sinks[key]
 				if !ok {
 					sink = NewSink(dial, func(msg []byte) {
