@@ -5,6 +5,7 @@ import (
 	"net"
 	"testing"
 
+	"github.com/muxfd/multipath-udp/pkg/protocol"
 	"go.uber.org/goleak"
 )
 
@@ -82,7 +83,8 @@ func expectRead(t *testing.T, conn *net.UDPConn, want []byte) *net.UDPAddr {
 func TestMuxerSingleReceiver_SingleReceiver(t *testing.T) {
 	setUp(t)
 
-	input1Conn.Write([]byte("mugit sink"))
+	handshake, _ := protocol.NewHandshake("moogit sink", []byte{}).Serialize()
+	input1Conn.Write(handshake)
 	input1Conn.Write([]byte("mooogit test"))
 
 	expectRead(t, outputConn, []byte("mooogit test"))
@@ -93,9 +95,10 @@ func TestMuxerSingleReceiver_SingleReceiver(t *testing.T) {
 func TestMuxer_SingleReceiver_DuplicateHandshake(t *testing.T) {
 	setUp(t)
 
-	input1Conn.Write([]byte("mugit sink"))
-	input1Conn.Write([]byte("mugit sink"))
-	input1Conn.Write([]byte("mugit sink"))
+	handshake, _ := protocol.NewHandshake("moogit sink", []byte{}).Serialize()
+	input1Conn.Write(handshake)
+	input1Conn.Write(handshake)
+	input1Conn.Write(handshake)
 	input1Conn.Write([]byte("mooogit test"))
 
 	expectRead(t, outputConn, []byte("mooogit test"))
@@ -106,10 +109,11 @@ func TestMuxer_SingleReceiver_DuplicateHandshake(t *testing.T) {
 func TestMuxer_SingleReceiver_RespondsOnReceiverWithHandshakes(t *testing.T) {
 	setUp(t)
 
+	handshake, _ := protocol.NewHandshake("moogit sink", []byte{}).Serialize()
 	for i := 0; i < 10; i++ {
-		input1Conn.Write([]byte("mugit sink"))
+		input1Conn.Write(handshake)
 
-		expectRead(t, input1Conn, []byte("mugit sink"))
+		expectRead(t, input1Conn, handshake)
 	}
 
 	tearDown(t)
@@ -118,9 +122,10 @@ func TestMuxer_SingleReceiver_RespondsOnReceiverWithHandshakes(t *testing.T) {
 func TestMuxer_SingleReceiver_ForwardsResponse(t *testing.T) {
 	setUp(t)
 
-	input1Conn.Write([]byte("mugit sink"))
+	handshake, _ := protocol.NewHandshake("moogit sink", []byte{}).Serialize()
+	input1Conn.Write(handshake)
 
-	expectRead(t, input1Conn, []byte("mugit sink"))
+	expectRead(t, input1Conn, handshake)
 
 	input1Conn.Write([]byte("mooogit test"))
 
@@ -136,19 +141,22 @@ func TestMuxer_SingleReceiver_ForwardsResponse(t *testing.T) {
 func TestMuxer_SingleReceiver_E2E(t *testing.T) {
 	setUp(t)
 
-	input1Conn.Write([]byte("mugit sink"))
-	input1Conn.Write([]byte("mugit sink"))
-	input1Conn.Write([]byte("mugit sink"))
+	handshake, _ := protocol.NewHandshake("moogit sink", []byte{}).Serialize()
+	input1Conn.Write(handshake)
+	input1Conn.Write(handshake)
+	input1Conn.Write(handshake)
 
-	expectRead(t, input1Conn, []byte("mugit sink"))
-	expectRead(t, input1Conn, []byte("mugit sink"))
-	expectRead(t, input1Conn, []byte("mugit sink"))
+	expectRead(t, input1Conn, handshake)
+	expectRead(t, input1Conn, handshake)
+	expectRead(t, input1Conn, handshake)
 
 	input1Conn.Write([]byte("mooogit test 1"))
 	input1Conn.Write([]byte("mooogit test 1"))
 	input1Conn.Write([]byte("mooogit test 1"))
 
 	sender := expectRead(t, outputConn, []byte("mooogit test 1"))
+	expectRead(t, outputConn, []byte("mooogit test 1"))
+	expectRead(t, outputConn, []byte("mooogit test 1"))
 
 	outputConn.WriteToUDP([]byte("mooogit response"), sender)
 	outputConn.WriteToUDP([]byte("mooogit response"), sender)
@@ -162,6 +170,7 @@ func TestMuxer_SingleReceiver_E2E(t *testing.T) {
 	input1Conn.Write([]byte("mooogit test 2"))
 	input1Conn.Write([]byte("mooogit test 3"))
 
+	expectRead(t, outputConn, []byte("mooogit test 2"))
 	expectRead(t, outputConn, []byte("mooogit test 2"))
 	expectRead(t, outputConn, []byte("mooogit test 3"))
 
@@ -179,21 +188,23 @@ func TestMuxer_SingleReceiver_E2E(t *testing.T) {
 func TestMuxer_MultiReceiver_E2E(t *testing.T) {
 	setUp(t)
 
-	input1Conn.Write([]byte("mugit sink"))
-	input1Conn.Write([]byte("mugit sink"))
-	input1Conn.Write([]byte("mugit sink"))
+	handshake1, _ := protocol.NewHandshake("moogit sink 1", []byte{1}).Serialize()
+	input1Conn.Write(handshake1)
+	input1Conn.Write(handshake1)
+	input1Conn.Write(handshake1)
 
-	expectRead(t, input1Conn, []byte("mugit sink"))
-	expectRead(t, input1Conn, []byte("mugit sink"))
-	expectRead(t, input1Conn, []byte("mugit sink"))
+	expectRead(t, input1Conn, handshake1)
+	expectRead(t, input1Conn, handshake1)
+	expectRead(t, input1Conn, handshake1)
 
-	input2Conn.Write([]byte("mugit sink"))
-	input2Conn.Write([]byte("mugit sink"))
-	input2Conn.Write([]byte("mugit sink"))
+	handshake2, _ := protocol.NewHandshake("moogit sink 2", []byte{1}).Serialize()
+	input2Conn.Write(handshake2)
+	input2Conn.Write(handshake2)
+	input2Conn.Write(handshake2)
 
-	expectRead(t, input2Conn, []byte("mugit sink"))
-	expectRead(t, input2Conn, []byte("mugit sink"))
-	expectRead(t, input2Conn, []byte("mugit sink"))
+	expectRead(t, input2Conn, handshake2)
+	expectRead(t, input2Conn, handshake2)
+	expectRead(t, input2Conn, handshake2)
 
 	input1Conn.Write([]byte("mooogit test 1"))
 	input1Conn.Write([]byte("mooogit test 1"))
@@ -201,6 +212,9 @@ func TestMuxer_MultiReceiver_E2E(t *testing.T) {
 	input2Conn.Write([]byte("mooogit test 1"))
 
 	sender := expectRead(t, outputConn, []byte("mooogit test 1"))
+	expectRead(t, outputConn, []byte("mooogit test 1"))
+	expectRead(t, outputConn, []byte("mooogit test 1"))
+	expectRead(t, outputConn, []byte("mooogit test 1"))
 
 	outputConn.WriteToUDP([]byte("mooogit response"), sender)
 	outputConn.WriteToUDP([]byte("mooogit response"), sender)
@@ -213,21 +227,24 @@ func TestMuxer_MultiReceiver_E2E(t *testing.T) {
 
 	input1Conn.Write([]byte("mooogit test 2"))
 	input1Conn.Write([]byte("mooogit test 2"))
-
 	input2Conn.Write([]byte("mooogit test 2"))
 	input2Conn.Write([]byte("mooogit test 3"))
 	input1Conn.Write([]byte("mooogit test 3"))
 
 	expectRead(t, outputConn, []byte("mooogit test 2"))
+	expectRead(t, outputConn, []byte("mooogit test 2"))
+	expectRead(t, outputConn, []byte("mooogit test 2"))
+	expectRead(t, outputConn, []byte("mooogit test 3"))
 	expectRead(t, outputConn, []byte("mooogit test 3"))
 
-	input3Conn.Write([]byte("mugit sink"))
-	input3Conn.Write([]byte("mugit sink"))
-	input3Conn.Write([]byte("mugit sink"))
+	handshake3, _ := protocol.NewHandshake("moogit sink 3", []byte{1}).Serialize()
+	input3Conn.Write(handshake3)
+	input3Conn.Write(handshake3)
+	input3Conn.Write(handshake3)
 
-	expectRead(t, input3Conn, []byte("mugit sink"))
-	expectRead(t, input3Conn, []byte("mugit sink"))
-	expectRead(t, input3Conn, []byte("mugit sink"))
+	expectRead(t, input3Conn, handshake3)
+	expectRead(t, input3Conn, handshake3)
+	expectRead(t, input3Conn, handshake3)
 
 	outputConn.WriteToUDP([]byte("mooogit response 2"), sender)
 	outputConn.WriteToUDP([]byte("mooogit response 2"), sender)
@@ -244,6 +261,46 @@ func TestMuxer_MultiReceiver_E2E(t *testing.T) {
 	expectRead(t, input3Conn, []byte("mooogit response 2"))
 	expectRead(t, input3Conn, []byte("mooogit response 2"))
 	expectRead(t, input3Conn, []byte("mooogit response 2"))
+
+	tearDown(t)
+}
+
+func TestMuxer_MultiReceiver_MultiSession_E2E(t *testing.T) {
+	setUp(t)
+
+	handshake1, _ := protocol.NewHandshake("moogit sink 1", []byte{1}).Serialize()
+	input1Conn.Write(handshake1)
+	expectRead(t, input1Conn, handshake1)
+
+	handshake2, _ := protocol.NewHandshake("moogit sink 2", []byte{1}).Serialize()
+	input2Conn.Write(handshake2)
+	expectRead(t, input2Conn, handshake2)
+
+	input1Conn.Write([]byte("mooogit test 1"))
+	input2Conn.Write([]byte("mooogit test 1"))
+
+	sender1 := expectRead(t, outputConn, []byte("mooogit test 1"))
+	sender2 := expectRead(t, outputConn, []byte("mooogit test 1"))
+
+	if sender1.Port != sender2.Port {
+		t.Errorf("expected same senders, received %v and %v", sender1, sender2)
+	}
+
+	outputConn.WriteToUDP([]byte("mooogit response"), sender1)
+
+	expectRead(t, input1Conn, []byte("mooogit response"))
+	expectRead(t, input2Conn, []byte("mooogit response"))
+
+	handshake3, _ := protocol.NewHandshake("moogit sink 3", []byte{2}).Serialize()
+	input3Conn.Write(handshake3)
+
+	input3Conn.Write([]byte("mooogit test 1"))
+
+	sender3 := expectRead(t, outputConn, []byte("mooogit test 1"))
+
+	if sender1.Port == sender3.Port {
+		t.Errorf("expected different senders, received %v and %v", sender1, sender3)
+	}
 
 	tearDown(t)
 }

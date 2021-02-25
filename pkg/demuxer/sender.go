@@ -9,13 +9,14 @@ import (
 
 // Sender represents a multiplexed UDP session from a single source.
 type Sender struct {
-	send chan []byte
-	conn *net.UDPConn
+	send   chan []byte
+	conn   *net.UDPConn
+	closed bool
 }
 
 // AddSender adds a route to raddr via laddr.
-func NewSender(session []byte, laddr, raddr *net.UDPAddr, onResponse func([]byte), handshakeTimeout time.Duration) *Sender {
-	send := make(chan []byte, 2048)
+func NewSender(handshake []byte, laddr, raddr *net.UDPAddr, onResponse func([]byte), handshakeTimeout time.Duration) *Sender {
+	send := make(chan []byte, 128)
 	conn, err := net.DialUDP("udp", laddr, raddr)
 	if err != nil {
 		fmt.Printf("error dialing %s -> %s\n", laddr, raddr)
@@ -34,11 +35,11 @@ func NewSender(session []byte, laddr, raddr *net.UDPAddr, onResponse func([]byte
 	successfulHandshake := make(chan bool)
 	go func() {
 		// write the initial handshake immediately.
-		_, err := conn.Write(session)
+		_, err := conn.Write(handshake)
 		if err != nil {
 			fmt.Printf("failed to write handshake address %s: %v\n", raddr, err)
 		}
-		for {
+		for attempts := 0; attempts < 30; attempts++ {
 			select {
 			case <-successfulHandshake:
 				// pipe write channel
@@ -57,12 +58,13 @@ func NewSender(session []byte, laddr, raddr *net.UDPAddr, onResponse func([]byte
 				close(successfulHandshake)
 				return
 			case <-time.After(handshakeTimeout):
-				_, err := conn.Write(session)
+				_, err := conn.Write(handshake)
 				if err != nil {
 					fmt.Printf("failed to write handshake address %s: %v\n", raddr, err)
 				}
 			}
 		}
+		fmt.Printf("failed to establish handshake on address %s\n", raddr)
 	}()
 
 	// read inbound channel
@@ -74,7 +76,7 @@ func NewSender(session []byte, laddr, raddr *net.UDPAddr, onResponse func([]byte
 			if err != nil {
 				break
 			}
-			isHandshake := bytes.Equal(msg[:n], session)
+			isHandshake := bytes.Equal(msg[:n], handshake)
 			if !handshakeReceived {
 				if !isHandshake {
 					fmt.Printf("invalid handshake from udp address %s: %v\n", raddr, msg[:n])
