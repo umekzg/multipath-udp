@@ -6,7 +6,9 @@ import (
 	"net"
 	"os"
 
+	"github.com/muxfd/multipath-udp/pkg/deduplicator"
 	"github.com/muxfd/multipath-udp/pkg/muxer"
+	"github.com/muxfd/multipath-udp/pkg/scheduler"
 )
 
 var (
@@ -52,7 +54,14 @@ func main() {
 
 	fmt.Printf("listening to %s forwarding to %s\n", inputAddr, outputAddr)
 
-	m := muxer.NewMuxer(inputAddr, outputAddr)
+	dedup, err := deduplicator.NewSrtDeduplicator(10000)
+	if err != nil {
+		panic(err)
+	}
+
+	m := muxer.NewMuxer(inputAddr, outputAddr,
+		muxer.WithDeduplicator(dedup),
+		muxer.WithScheduler(scheduler.NewDemandScheduler()))
 
 	m.Wait()
 }

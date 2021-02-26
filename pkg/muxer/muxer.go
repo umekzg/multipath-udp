@@ -103,7 +103,7 @@ func (m *Muxer) readLoop(dial *net.UDPAddr) {
 			sink.Write(msg[:n])
 		}
 		if m.scheduler != nil {
-			go m.scheduler.Receive(log.handshake.Sender, msg[:n])
+			go m.scheduler.OnReceive(log.handshake.Sender, msg[:n])
 		}
 	}
 }
@@ -118,5 +118,8 @@ func (m *Muxer) Close() {
 	m.conn.Close()
 	for _, sink := range m.sinks {
 		sink.Close()
+	}
+	if m.scheduler != nil {
+		m.scheduler.Close()
 	}
 }

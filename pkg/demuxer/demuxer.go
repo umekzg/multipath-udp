@@ -143,4 +143,7 @@ func (d *Demuxer) Close() {
 	for _, sender := range d.senders {
 		sender.Close()
 	}
+	if d.scheduler != nil {
+		d.scheduler.Close()
+	}
 }

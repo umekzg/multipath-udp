@@ -30,7 +30,6 @@ func NewSender(handshake []byte, laddr, raddr *net.UDPAddr, onResponse func([]by
 	}
 
 	// TODO: this negotiation can probably be cleaned up a bit...
-
 	// start negotiation
 	successfulHandshake := make(chan bool)
 	go func() {
