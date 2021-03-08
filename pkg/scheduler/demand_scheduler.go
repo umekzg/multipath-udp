@@ -37,7 +37,7 @@ func (s *DemandScheduler) SenderInit(receiverAddr *net.UDPAddr) {
 			r, err := client.Get(fmt.Sprintf("http://%s:%d/", receiverAddr.IP.String(), receiverAddr.Port))
 			if err != nil {
 				fmt.Printf("error getting: %v\n", err)
-				time.Sleep(3 * time.Second)
+				time.Sleep(1 * time.Second)
 				continue
 			}
 
@@ -54,7 +54,7 @@ func (s *DemandScheduler) SenderInit(receiverAddr *net.UDPAddr) {
 
 			s.Unlock()
 
-			time.Sleep(3 * time.Second)
+			time.Sleep(1 * time.Second)
 		}
 	}()
 }
