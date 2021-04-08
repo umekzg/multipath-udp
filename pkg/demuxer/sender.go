@@ -1,22 +1,23 @@
 package demuxer
 
 import (
-	"bytes"
 	"fmt"
 	"net"
 	"time"
+
+	"github.com/muxfd/multipath-udp/pkg/protocol"
 )
 
 // Sender represents a multiplexed UDP session from a single source.
 type Sender struct {
-	send   chan []byte
-	conn   *net.UDPConn
-	closed bool
+	MissingSequences chan uint64
+	send             chan protocol.DataPacket
+	conn             *net.UDPConn
 }
 
 // AddSender adds a route to raddr via laddr.
-func NewSender(handshake []byte, laddr, raddr *net.UDPAddr, onResponse func([]byte), handshakeTimeout time.Duration) *Sender {
-	send := make(chan []byte, 128)
+func NewSender(sessionID string, laddr, raddr *net.UDPAddr, handshakeTimeout time.Duration) *Sender {
+	send := make(chan protocol.DataPacket, 128)
 	conn, err := net.DialUDP("udp", laddr, raddr)
 	if err != nil {
 		fmt.Printf("error dialing %s -> %s\n", laddr, raddr)
@@ -32,6 +33,7 @@ func NewSender(handshake []byte, laddr, raddr *net.UDPAddr, onResponse func([]by
 	// TODO: this negotiation can probably be cleaned up a bit...
 	// start negotiation
 	successfulHandshake := make(chan bool)
+	handshake := protocol.HandshakePacket{SessionID: sessionID}.Serialize()
 	go func() {
 		// write the initial handshake immediately.
 		_, err := conn.Write(handshake)
@@ -48,9 +50,9 @@ func NewSender(handshake []byte, laddr, raddr *net.UDPAddr, onResponse func([]by
 						if !ok {
 							break
 						}
-						_, err := conn.Write(msg)
+						_, err := conn.Write(msg.Serialize())
 						if err != nil {
-							fmt.Printf("failed to write msg %s for sender %v %v\n", msg, laddr, raddr)
+							fmt.Printf("failed to write msg %v for sender %v %v\n", msg, laddr, raddr)
 						}
 					}
 				}()
@@ -75,18 +77,21 @@ func NewSender(handshake []byte, laddr, raddr *net.UDPAddr, onResponse func([]by
 			if err != nil {
 				break
 			}
-			isHandshake := bytes.Equal(msg[:n], handshake)
-			if !handshakeReceived {
-				if !isHandshake {
-					fmt.Printf("invalid handshake from udp address %s: %v\n", raddr, msg[:n])
-				} else {
-					handshakeReceived = true
+			packetType, _ := protocol.Deserialize(msg[:n])
+			switch packetType {
+			case protocol.HANDSHAKE:
+				if !handshakeReceived {
+					// don't push duplicates, just ignore them.
 					successfulHandshake <- true
 				}
-			} else if !isHandshake {
-				onResponse(msg[:n])
-			} else {
-				fmt.Printf("duplicate handshake received\n")
+				handshakeReceived = true
+			case protocol.MISSING_SEQUENCE:
+				// resend the missing sequence.
+			case protocol.METER:
+				// take note and drop packets if congested.
+			default:
+				// shouldn't happen lol.
+				fmt.Printf("received invalid data packet from %s\n", raddr)
 			}
 		}
 	}()
@@ -94,9 +99,9 @@ func NewSender(handshake []byte, laddr, raddr *net.UDPAddr, onResponse func([]by
 	return sender
 }
 
-func (sender *Sender) Write(msg []byte) (n int, err error) {
+func (sender *Sender) Write(msg protocol.DataPacket) (n int, err error) {
 	sender.send <- msg
-	return len(msg), nil
+	return len(msg.Payload), nil
 }
 
 // Close closes the sender.

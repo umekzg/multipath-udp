@@ -4,15 +4,12 @@ import (
 	"net"
 	"time"
 
-	"github.com/muxfd/multipath-udp/pkg/deduplicator"
 	"github.com/muxfd/multipath-udp/pkg/interfaces"
-	"github.com/muxfd/multipath-udp/pkg/scheduler"
 )
 
 // HandshakeTimeout specifies the duration before resending a UDP handshake.
 func HandshakeTimeout(t time.Duration) func(*Demuxer) {
 	return func(d *Demuxer) {
-		d.handshakeTimeout = t
 	}
 }
 
@@ -26,17 +23,5 @@ func AutoBindInterfaces(raddr string) func(*Demuxer) {
 			d.Wait()
 			close()
 		}()
-	}
-}
-
-func WithScheduler(scheduler scheduler.Scheduler) func(*Demuxer) {
-	return func(d *Demuxer) {
-		d.scheduler = scheduler
-	}
-}
-
-func WithDeduplicator(deduplicator deduplicator.Deduplicator) func(*Demuxer) {
-	return func(d *Demuxer) {
-		d.deduplicator = deduplicator
 	}
 }

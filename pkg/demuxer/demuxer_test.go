@@ -1,214 +1,214 @@
 package demuxer
 
-import (
-	"bytes"
-	"net"
-	"testing"
-	"time"
+// import (
+// 	"bytes"
+// 	"net"
+// 	"testing"
+// 	"time"
 
-	"go.uber.org/goleak"
-)
+// 	"go.uber.org/goleak"
+// )
 
-var (
-	demuxer    *Demuxer
-	inputConn  *net.UDPConn
-	outputConn *net.UDPConn
-)
+// var (
+// 	demuxer    *Demuxer
+// 	inputConn  *net.UDPConn
+// 	outputConn *net.UDPConn
+// )
 
-func setUp(t *testing.T, options ...func(*Demuxer)) {
-	input := "127.0.0.1:13002"
-	output := "127.0.0.1:13003"
+// func setUp(t *testing.T, options ...func(*Demuxer)) {
+// 	input := "127.0.0.1:13002"
+// 	output := "127.0.0.1:13003"
 
-	inputAddr, err := net.ResolveUDPAddr("udp", input)
-	if err != nil {
-		t.Errorf("failed to resolve %s: %v", input, err)
-		return
-	}
+// 	inputAddr, err := net.ResolveUDPAddr("udp", input)
+// 	if err != nil {
+// 		t.Errorf("failed to resolve %s: %v", input, err)
+// 		return
+// 	}
 
-	outputAddr, err := net.ResolveUDPAddr("udp", output)
-	if err != nil {
-		t.Errorf("failed to resolve %s: %v", output, err)
-		return
-	}
+// 	outputAddr, err := net.ResolveUDPAddr("udp", output)
+// 	if err != nil {
+// 		t.Errorf("failed to resolve %s: %v", output, err)
+// 		return
+// 	}
 
-	demuxer = NewDemuxer(inputAddr, outputAddr, options...)
+// 	demuxer = NewDemuxer(inputAddr, outputAddr, options...)
 
-	inputConn, err = net.DialUDP("udp", nil, inputAddr)
-	if err != nil {
-		t.Errorf("failed to dial %s: %v", inputAddr, err)
-		return
-	}
+// 	inputConn, err = net.DialUDP("udp", nil, inputAddr)
+// 	if err != nil {
+// 		t.Errorf("failed to dial %s: %v", inputAddr, err)
+// 		return
+// 	}
 
-	outputConn, err = net.ListenUDP("udp", outputAddr)
-	if err != nil {
-		t.Errorf("failed to listen %s: %v", outputAddr, err)
-		return
-	}
-}
+// 	outputConn, err = net.ListenUDP("udp", outputAddr)
+// 	if err != nil {
+// 		t.Errorf("failed to listen %s: %v", outputAddr, err)
+// 		return
+// 	}
+// }
 
-func tearDown(t *testing.T) {
-	demuxer.Close()
-	outputConn.Close()
-	inputConn.Close()
-	goleak.VerifyNone(t)
-}
+// func tearDown(t *testing.T) {
+// 	demuxer.Close()
+// 	outputConn.Close()
+// 	inputConn.Close()
+// 	goleak.VerifyNone(t)
+// }
 
-func expectHandshake(t *testing.T, conn *net.UDPConn) *net.UDPAddr {
-	msg := make([]byte, 4096)
-	n, sender, err := conn.ReadFromUDP(msg)
-	if err != nil {
-		t.Errorf("received error from udp address %s: %v\n", sender, err)
-	}
-	_, err = conn.WriteToUDP(msg[:n], sender)
-	if err != nil {
-		t.Errorf("received error returning handshake from udp address %s: %v\n", sender, err)
-	}
-	return sender
-}
+// func expectHandshake(t *testing.T, conn *net.UDPConn) *net.UDPAddr {
+// 	msg := make([]byte, 4096)
+// 	n, sender, err := conn.ReadFromUDP(msg)
+// 	if err != nil {
+// 		t.Errorf("received error from udp address %s: %v\n", sender, err)
+// 	}
+// 	_, err = conn.WriteToUDP(msg[:n], sender)
+// 	if err != nil {
+// 		t.Errorf("received error returning handshake from udp address %s: %v\n", sender, err)
+// 	}
+// 	return sender
+// }
 
-func expectRead(t *testing.T, conn *net.UDPConn, want []byte) *net.UDPAddr {
-	msg := make([]byte, 4096)
-	n, sender, err := conn.ReadFromUDP(msg)
-	if err != nil {
-		t.Errorf("received error from udp address %s: %v\n", sender, err)
-	} else if !bytes.Equal(msg[:n], want) {
-		t.Errorf("received incorrect read: %v vs %v", msg[:n], want)
-	}
-	return sender
-}
+// func expectRead(t *testing.T, conn *net.UDPConn, want []byte) *net.UDPAddr {
+// 	msg := make([]byte, 4096)
+// 	n, sender, err := conn.ReadFromUDP(msg)
+// 	if err != nil {
+// 		t.Errorf("received error from udp address %s: %v\n", sender, err)
+// 	} else if !bytes.Equal(msg[:n], want) {
+// 		t.Errorf("received incorrect read: %v vs %v", msg[:n], want)
+// 	}
+// 	return sender
+// }
 
-func BenchmarkDemuxer(b *testing.B) {
-	input := "127.0.0.1:13002"
-	output := "127.0.0.1:13003"
+// func BenchmarkDemuxer(b *testing.B) {
+// 	input := "127.0.0.1:13002"
+// 	output := "127.0.0.1:13003"
 
-	inputAddr, err := net.ResolveUDPAddr("udp", input)
-	if err != nil {
-		b.Errorf("failed to resolve %s: %v", input, err)
-		return
-	}
+// 	inputAddr, err := net.ResolveUDPAddr("udp", input)
+// 	if err != nil {
+// 		b.Errorf("failed to resolve %s: %v", input, err)
+// 		return
+// 	}
 
-	outputAddr, err := net.ResolveUDPAddr("udp", output)
-	if err != nil {
-		b.Errorf("failed to resolve %s: %v", output, err)
-		return
-	}
+// 	outputAddr, err := net.ResolveUDPAddr("udp", output)
+// 	if err != nil {
+// 		b.Errorf("failed to resolve %s: %v", output, err)
+// 		return
+// 	}
 
-	demuxer = NewDemuxer(inputAddr, outputAddr)
+// 	demuxer = NewDemuxer(inputAddr, outputAddr)
 
-	inputConn, err = net.DialUDP("udp", nil, inputAddr)
-	if err != nil {
-		b.Errorf("failed to dial %s: %v", inputAddr, err)
-		return
-	}
+// 	inputConn, err = net.DialUDP("udp", nil, inputAddr)
+// 	if err != nil {
+// 		b.Errorf("failed to dial %s: %v", inputAddr, err)
+// 		return
+// 	}
 
-	outputConn, err = net.ListenUDP("udp", outputAddr)
-	if err != nil {
-		b.Errorf("failed to listen %s: %v", outputAddr, err)
-		return
-	}
+// 	outputConn, err = net.ListenUDP("udp", outputAddr)
+// 	if err != nil {
+// 		b.Errorf("failed to listen %s: %v", outputAddr, err)
+// 		return
+// 	}
 
-	demuxer.interfaces.Add(nil)
+// 	demuxer.interfaces.Add(nil)
 
-	inputConn.Write([]byte("mooogit test"))
+// 	inputConn.Write([]byte("mooogit test"))
 
-	msg := make([]byte, 4096)
-	n, sender, err := outputConn.ReadFromUDP(msg)
-	if err != nil {
-		b.Errorf("received error from udp address %s: %v\n", sender, err)
-	}
-	_, err = outputConn.WriteToUDP(msg[:n], sender)
-	if err != nil {
-		b.Errorf("received error returning handshake from udp address %s: %v\n", sender, err)
-	}
+// 	msg := make([]byte, 4096)
+// 	n, sender, err := outputConn.ReadFromUDP(msg)
+// 	if err != nil {
+// 		b.Errorf("received error from udp address %s: %v\n", sender, err)
+// 	}
+// 	_, err = outputConn.WriteToUDP(msg[:n], sender)
+// 	if err != nil {
+// 		b.Errorf("received error returning handshake from udp address %s: %v\n", sender, err)
+// 	}
 
-	for i := 0; i < b.N; i++ {
-		inputConn.Write([]byte("packet mooooo"))
-		_, sender, err := outputConn.ReadFromUDP(msg)
-		if err != nil {
-			b.Errorf("received error from udp address %s: %v\n", sender, err)
-		}
-	}
+// 	for i := 0; i < b.N; i++ {
+// 		inputConn.Write([]byte("packet mooooo"))
+// 		_, sender, err := outputConn.ReadFromUDP(msg)
+// 		if err != nil {
+// 			b.Errorf("received error from udp address %s: %v\n", sender, err)
+// 		}
+// 	}
 
-	demuxer.Close()
-	outputConn.Close()
-	inputConn.Close()
-}
+// 	demuxer.Close()
+// 	outputConn.Close()
+// 	inputConn.Close()
+// }
 
-func TestDemuxer_SingleSender(t *testing.T) {
-	setUp(t)
+// func TestDemuxer_SingleSender(t *testing.T) {
+// 	setUp(t)
 
-	demuxer.interfaces.Add(nil)
+// 	demuxer.interfaces.Add(nil)
 
-	inputConn.Write([]byte("mooogit test"))
+// 	inputConn.Write([]byte("mooogit test"))
 
-	expectHandshake(t, outputConn)
+// 	expectHandshake(t, outputConn)
 
-	expectRead(t, outputConn, []byte("mooogit test"))
+// 	expectRead(t, outputConn, []byte("mooogit test"))
 
-	tearDown(t)
-}
+// 	tearDown(t)
+// }
 
-func TestDemuxer_SingleSender_DelayedResponseDuplicateHandshake(t *testing.T) {
-	setUp(t, HandshakeTimeout(1*time.Millisecond)) // 1ms timeout seems reasonable for the networking stack.
+// func TestDemuxer_SingleSender_DelayedResponseDuplicateHandshake(t *testing.T) {
+// 	setUp(t, HandshakeTimeout(1*time.Millisecond)) // 1ms timeout seems reasonable for the networking stack.
 
-	demuxer.interfaces.Add(nil)
+// 	demuxer.interfaces.Add(nil)
 
-	inputConn.Write([]byte("mooogit test"))
+// 	inputConn.Write([]byte("mooogit test"))
 
-	msg1 := make([]byte, 4096)
-	msg2 := make([]byte, 4096)
-	msg3 := make([]byte, 4096)
-	n, sender, _ := outputConn.ReadFromUDP(msg1)
-	outputConn.ReadFromUDP(msg2)
-	if !bytes.Equal(msg1, msg2) {
-		t.Errorf("invalid second handshake message: %v != %v", msg1, msg2)
-	}
-	outputConn.ReadFromUDP(msg3)
-	if !bytes.Equal(msg1, msg3) {
-		t.Errorf("invalid third handshake message: %v != %v", msg1, msg3)
-	}
+// 	msg1 := make([]byte, 4096)
+// 	msg2 := make([]byte, 4096)
+// 	msg3 := make([]byte, 4096)
+// 	n, sender, _ := outputConn.ReadFromUDP(msg1)
+// 	outputConn.ReadFromUDP(msg2)
+// 	if !bytes.Equal(msg1, msg2) {
+// 		t.Errorf("invalid second handshake message: %v != %v", msg1, msg2)
+// 	}
+// 	outputConn.ReadFromUDP(msg3)
+// 	if !bytes.Equal(msg1, msg3) {
+// 		t.Errorf("invalid third handshake message: %v != %v", msg1, msg3)
+// 	}
 
-	outputConn.WriteToUDP(msg1[:n], sender)
-	outputConn.WriteToUDP(msg1[:n], sender)
-	outputConn.WriteToUDP(msg1[:n], sender)
+// 	outputConn.WriteToUDP(msg1[:n], sender)
+// 	outputConn.WriteToUDP(msg1[:n], sender)
+// 	outputConn.WriteToUDP(msg1[:n], sender)
 
-	expectRead(t, outputConn, []byte("mooogit test"))
+// 	expectRead(t, outputConn, []byte("mooogit test"))
 
-	tearDown(t)
-}
+// 	tearDown(t)
+// }
 
-func TestDemuxer_SingleSender_MultipleMessages(t *testing.T) {
-	setUp(t)
+// func TestDemuxer_SingleSender_MultipleMessages(t *testing.T) {
+// 	setUp(t)
 
-	demuxer.interfaces.Add(nil)
+// 	demuxer.interfaces.Add(nil)
 
-	inputConn.Write([]byte("mooogit test 1"))
-	inputConn.Write([]byte("mooogit test 2"))
-	inputConn.Write([]byte("mooogit test 3"))
+// 	inputConn.Write([]byte("mooogit test 1"))
+// 	inputConn.Write([]byte("mooogit test 2"))
+// 	inputConn.Write([]byte("mooogit test 3"))
 
-	expectHandshake(t, outputConn)
+// 	expectHandshake(t, outputConn)
 
-	expectRead(t, outputConn, []byte("mooogit test 1"))
-	expectRead(t, outputConn, []byte("mooogit test 2"))
-	expectRead(t, outputConn, []byte("mooogit test 3"))
+// 	expectRead(t, outputConn, []byte("mooogit test 1"))
+// 	expectRead(t, outputConn, []byte("mooogit test 2"))
+// 	expectRead(t, outputConn, []byte("mooogit test 3"))
 
-	tearDown(t)
-}
+// 	tearDown(t)
+// }
 
-func TestDemuxer_SingleSender_ForwardsResponse(t *testing.T) {
-	setUp(t)
+// func TestDemuxer_SingleSender_ForwardsResponse(t *testing.T) {
+// 	setUp(t)
 
-	demuxer.interfaces.Add(nil)
+// 	demuxer.interfaces.Add(nil)
 
-	inputConn.Write([]byte("mooogit test 1"))
+// 	inputConn.Write([]byte("mooogit test 1"))
 
-	expectHandshake(t, outputConn)
+// 	expectHandshake(t, outputConn)
 
-	sender := expectRead(t, outputConn, []byte("mooogit test 1"))
+// 	sender := expectRead(t, outputConn, []byte("mooogit test 1"))
 
-	outputConn.WriteToUDP([]byte("mooogit response"), sender)
+// 	outputConn.WriteToUDP([]byte("mooogit response"), sender)
 
-	expectRead(t, inputConn, []byte("mooogit response"))
+// 	expectRead(t, inputConn, []byte("mooogit response"))
 
-	tearDown(t)
-}
+// 	tearDown(t)
+// }

@@ -5,15 +5,18 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"time"
 )
 
 type InterfaceSet struct {
 	sync.RWMutex
-	interfaces map[string]*net.UDPAddr
+	sessionID string
+	raddr     *net.UDPAddr
+	senders   map[string]*Sender
 }
 
-func NewInterfaceSet() *InterfaceSet {
-	return &InterfaceSet{interfaces: make(map[string]*net.UDPAddr)}
+func NewInterfaceSet(sessionID string, raddr *net.UDPAddr) *InterfaceSet {
+	return &InterfaceSet{sessionID: sessionID, senders: make(map[string]*Sender), raddr: raddr}
 }
 
 func getUDPAddrKey(addr *net.UDPAddr) string {
@@ -27,23 +30,27 @@ func getUDPAddrKey(addr *net.UDPAddr) string {
 func (i *InterfaceSet) Add(addr *net.UDPAddr) {
 	fmt.Printf("adding interface %v\n", addr)
 	i.Lock()
-	i.interfaces[getUDPAddrKey(addr)] = addr
+	i.senders[getUDPAddrKey(addr)] = NewSender(i.sessionID, addr, i.raddr, 3*time.Second)
 	i.Unlock()
 }
 
 func (i *InterfaceSet) Remove(addr *net.UDPAddr) {
 	fmt.Printf("removing interface %v\n", addr)
 	i.Lock()
-	delete(i.interfaces, getUDPAddrKey(addr))
+	key := getUDPAddrKey(addr)
+	if sender, ok := i.senders[key]; ok {
+		sender.Close()
+	}
+	delete(i.senders, key)
 	i.Unlock()
 }
 
-func (s *InterfaceSet) GetAll() []*net.UDPAddr {
+func (s *InterfaceSet) Senders() []*Sender {
 	s.RLock()
-	var addrs []*net.UDPAddr
-	for _, addr := range s.interfaces {
-		addrs = append(addrs, addr)
+	var senders []*Sender
+	for _, sender := range s.senders {
+		senders = append(senders, sender)
 	}
 	s.RUnlock()
-	return addrs
+	return senders
 }

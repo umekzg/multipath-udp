@@ -63,7 +63,7 @@ func main() {
 		inputAddr, outputAddr,
 		demuxer.AutoBindInterfaces(output),
 		demuxer.WithDeduplicator(dedup),
-		demuxer.WithScheduler(scheduler.NewDemandScheduler()))
+		demuxer.WithScheduler(scheduler.NewDoubleScheduler()))
 
 	m.Wait()
 }

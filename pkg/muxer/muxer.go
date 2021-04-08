@@ -1,23 +1,20 @@
 package muxer
 
 import (
-	"bytes"
-	"encoding/hex"
 	"fmt"
 	"net"
 	"sync"
 
-	"github.com/muxfd/multipath-udp/pkg/deduplicator"
 	"github.com/muxfd/multipath-udp/pkg/protocol"
-	"github.com/muxfd/multipath-udp/pkg/scheduler"
+	"github.com/pion/rtcp"
+	"github.com/pion/rtp"
 )
 
 type Muxer struct {
-	senderLog *SenderLog
-	sinks     map[string]*Sink
+	sync.RWMutex
 
-	deduplicator deduplicator.Deduplicator
-	scheduler    scheduler.Scheduler // the scheduler is here for telemetry data.
+	sinks    map[string]*Sink
+	sessions map[uint32]*SessionSenderSet
 
 	conn *net.UDPConn
 	done *sync.WaitGroup
@@ -33,19 +30,13 @@ func NewMuxer(listen, dial *net.UDPAddr, options ...func(*Muxer)) *Muxer {
 	conn.SetWriteBuffer(1024 * 1024)
 	var wg sync.WaitGroup
 	m := &Muxer{
-		senderLog: NewSenderLog(),
-		sinks:     make(map[string]*Sink),
-		conn:      conn,
-		done:      &wg,
+		conn: conn,
+		done: &wg,
 	}
 	wg.Add(1)
 
 	for _, option := range options {
 		option(m)
-	}
-
-	if m.scheduler != nil {
-		m.scheduler.ReceiverInit(listen.Port)
 	}
 
 	go m.readLoop(dial)
@@ -65,45 +56,57 @@ func (m *Muxer) readLoop(dial *net.UDPAddr) {
 			break
 		}
 
-		log, ok := m.senderLog.GetLogEntry(senderAddr)
-		if !ok {
-			handshake, err := protocol.Deserialize(msg[:n])
-			if err != nil {
-				fmt.Printf("first message from socket is not a valid handshake: %v\n", err)
-				continue
-			}
-			fmt.Printf("new session from %v with handshake %v\n", senderAddr, msg[:n])
-			m.senderLog.Set(senderAddr, handshake, msg[:n])
-			if _, err = m.conn.WriteToUDP(msg[:n], senderAddr); err != nil {
-				fmt.Printf("error writing handshake response %v", err)
-			}
-			continue
-		} else if bytes.Equal(log.serialized, msg[:n]) {
-			// duplicate handshake, respond until it's successful.
-			fmt.Printf("duplicate handshake received\n")
-			if _, err := m.conn.WriteToUDP(msg[:n], senderAddr); err != nil {
-				fmt.Printf("error writing handshake response %v", err)
-			}
+		h := &rtp.Header{}
+
+		if err := h.Unmarshal(msg[:n]); err != nil {
+			fmt.Printf("error unmarshalling rtp packet %v\n", err)
 			continue
 		}
 
-		// forward this message to the sink for the session.
-		key := hex.EncodeToString(log.handshake.Session[:])
-		if m.deduplicator == nil || m.deduplicator.FromSender(msg) {
-			sink, ok := m.sinks[key]
-			if !ok {
-				sink = NewSink(dial, func(msg []byte) {
-					// forward this message to all senders with the same session id as this one.
-					for _, sender := range m.senderLog.GetUDPAddrs(log.handshake.Session[:]) {
-						m.conn.WriteToUDP(msg, sender)
-					}
-				})
-				m.sinks[key] = sink
+		if h.PayloadType == 200 {
+			// this is an RTCP packet.
+			p, err := rtcp.Unmarshal((msg[:n])
+			if err != nil {
+				fmt.Printf("error unmarshalling rtcp packet %v\n", err)
+				continue
 			}
-			sink.Write(msg[:n])
 		}
-		if m.scheduler != nil {
-			go m.scheduler.OnReceive(log.handshake.Sender, msg[:n])
+
+		m.sessions[h.SSRC].Add(senderAddr)
+
+		packetType, packet := protocol.Deserialize(msg[:n])
+
+		switch packetType {
+		case protocol.HANDSHAKE:
+			m.RLock()
+			m.conn.WriteToUDP(msg[:n], senderAddr)
+
+			sessionID := packet.(protocol.HandshakePacket).SessionID
+			m.sessions[senderAddr.String()] = sessionID
+			if _, ok := m.sinks[sessionID]; !ok {
+				m.sinks[sessionID] = NewSink(dial)
+			}
+
+			m.RUnlock()
+			break
+		case protocol.DATA:
+			// get the sink for this sender.
+			sessionID, ok := m.sessions[senderAddr.String()]
+			if !ok {
+				fmt.Printf("illegal state, no session id received\n")
+				break
+			}
+			sink, ok := m.sinks[sessionID]
+			if !ok {
+				fmt.Printf("illegal state, no sink for session id: %s\n", sessionID)
+				break
+			}
+			if _, err := sink.Write(packet.(protocol.DataPacket)); err != nil {
+				fmt.Printf("error writing packet to sink: %v\n", err)
+			}
+			break
+		default:
+			fmt.Printf("unknown packet type %v\n", packetType)
 		}
 	}
 }
@@ -118,8 +121,5 @@ func (m *Muxer) Close() {
 	m.conn.Close()
 	for _, sink := range m.sinks {
 		sink.Close()
-	}
-	if m.scheduler != nil {
-		m.scheduler.Close()
 	}
 }

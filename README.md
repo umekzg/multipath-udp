@@ -1,11 +1,6 @@
-# multipath-udp
+# multipath-rtp
 
-A userspace implementation of multipath UDP. This project is heavily inspired by [srtla](https://github.com/BELABOX/srtla). The primary difference is that it is not coupled to the SRT protocol and is written in go for educational purposes. If you're looking for a real UDP tunnel, it would probably be better to use something like glorytun or mlvpn. This project has two core feature goals:
-
-* Automatically register/deregister network interfaces.
-* Schedule packets in a highly configurable manner, duplicating traffic if necessary.
-
-Pretty much any other feature is ancillary.
+A tool that ingests RTMP, schedules it over multiple interfaces, and spits it out as an SRT stream.
 
 ## Usage
 
@@ -19,4 +14,33 @@ To run the receiver:
 
 ```
 go run cmd/receiver/main.go
+```
+
+## Design
+
+### Demuxer
+
+- Read from librtmp, depacketize
+- Packetize, add sequence number packet header
+- Loop through `InterfaceSet` on demuxer
+- Schedule and send through interfaces
+
+- Read from `InterfaceSet` bandwidth rates
+
+### Muxer
+
+- Receive connection with `sessionID`
+  - If new connection, open SRT connection with `sessionID`
+- Respond with handshake
+- Read UDP packets until error
+- Depacketize, read sequence number
+- Reorder, deduplicate
+- Write to SRT, ignoring dropped packets (receiver will handle)
+
+### InterfaceSet
+
+```
+NewInterfaceSet(sessionID []byte)  # for handshaking
+AddInterface()
+RemoveInterface()
 ```
