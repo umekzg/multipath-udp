@@ -83,7 +83,7 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 			switch v := p.(type) {
 			case *srt.ControlPacket:
 				sourceLock.Lock()
-				fmt.Printf("registering socket %d -> %v", v.HandshakeSocketId(), senderAddr)
+				fmt.Printf("registering socket %d -> %v\n", v.HandshakeSocketId(), senderAddr)
 				sources[v.HandshakeSocketId()] = senderAddr
 				sourceLock.Unlock()
 			}
