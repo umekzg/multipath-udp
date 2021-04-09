@@ -9,7 +9,7 @@ import (
 
 // AutoBindInterfaces adds a network interface listener to automatically
 // add or remove network interfaces.
-func AutoBindInterfaces(raddr string) func(*Demuxer) {
+func AutoBindInterfaces() func(*Demuxer) {
 	return func(d *Demuxer) {
 		d.interfaceBinder = interfaces.NewAutoBinder(net.Interfaces, 3*time.Second)
 	}

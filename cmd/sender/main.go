@@ -52,7 +52,7 @@ func main() {
 
 	fmt.Printf("listening to %s forwarding to %s\n", inputAddr, outputAddr)
 
-	demuxer.NewDemuxer().Start(inputAddr, outputAddr)
+	demuxer.NewDemuxer(demuxer.AutoBindInterfaces()).Start(inputAddr, outputAddr)
 
 	select {}
 }
