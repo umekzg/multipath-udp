@@ -69,31 +69,30 @@ func (r *ReceiverBuffer) runEventLoop() {
 					return
 				}
 				// add this packet.
-				if p.SequenceNumber() <= t.Packet.SequenceNumber() {
+				if p.SequenceNumber() <= r.tail {
 					// packet too old.
 					continue
 				}
 
 				// insert this packet into the correct spot taking the latest timestamp.
 				if q := r.get(p.SequenceNumber()); q == nil {
-					fmt.Printf("adding seq %d\n", p.SequenceNumber())
 					r.set(p.SequenceNumber(), &EnqueuedPacket{
 						Packet: p,
 						EmitAt: time.Now().Add(r.bufferDelay),
 					})
+					r.head = p.SequenceNumber()
 					r.count++
-					// progress the head if this packet within r.head + 65536/4
 				}
 				break
 			case <-time.After(time.Until(t.EmitAt)):
 				// broadcast the packet at the tail.
-				fmt.Printf("tail seq: %d\n", t.Packet.SequenceNumber())
 				r.EmitCh <- t.Packet
 				r.set(r.tail, nil)
 				r.tail++
 				r.count--
 				if r.count > 0 {
 					for r.get(r.tail) == nil {
+						fmt.Printf("missing packet %d\n", r.tail)
 						r.tail++
 					}
 				}
@@ -105,11 +104,11 @@ func (r *ReceiverBuffer) runEventLoop() {
 				return
 			}
 			// this is the first packet.
-			fmt.Printf("adding seq %d\n", p.SequenceNumber())
 			r.set(p.SequenceNumber(), &EnqueuedPacket{
 				Packet: p,
 				EmitAt: time.Now().Add(r.bufferDelay),
 			})
+			r.head = p.SequenceNumber()
 			r.tail = p.SequenceNumber()
 			r.count++
 			continue
