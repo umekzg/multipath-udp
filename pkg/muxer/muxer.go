@@ -57,6 +57,7 @@ func (m *Muxer) writeLoop(dial *net.UDPAddr) {
 	for {
 		p, ok := <-m.buf.EmitCh
 		if !ok {
+			fmt.Printf("emit ch closed\n")
 			break
 		}
 
@@ -81,6 +82,7 @@ func (m *Muxer) readLoop(listen *net.UDPAddr) {
 		for {
 			msg, ok := <-m.responseCh
 			if !ok {
+				fmt.Printf("response ch closed\n")
 				break
 			}
 

@@ -61,7 +61,9 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 			}
 			sourceLock.Lock()
 			if source, ok := sources[p.DestinationSocketId()]; ok {
-				r.WriteToUDP(msg, source)
+				if _, err := r.WriteToUDP(msg, source); err != nil {
+					fmt.Printf("error writing to udp: %v\n", err)
+				}
 			}
 			sourceLock.Unlock()
 		}
