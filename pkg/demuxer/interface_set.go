@@ -27,7 +27,8 @@ func getUDPAddrKey(addr *net.UDPAddr) string {
 
 func (i *InterfaceSet) Add(addr *net.UDPAddr) error {
 	fmt.Printf("adding interface %v\n", addr)
-	c, err := net.DialUDP("udp", addr, i.raddr)
+	d := &net.Dialer{LocalAddr: addr}
+	c, err := d.Dial("udp", i.raddr.String())
 	if err != nil {
 		return err
 	}
