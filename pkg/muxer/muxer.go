@@ -74,12 +74,6 @@ func (m *Muxer) writeLoop(dial *net.UDPAddr) {
 			break
 		}
 
-		switch v := p.(type) {
-		case *srt.ControlPacket:
-			fmt.Printf("control packet\n")
-		case *srt.DataPacket:
-			fmt.Printf("seq: %d\n", v.SequenceNumber())
-		}
 		if _, err := w.Write(p.Marshal()); err != nil {
 			fmt.Printf("failed to write packet %v\n", err)
 		}
@@ -121,8 +115,6 @@ func (m *Muxer) readLoop(listen *net.UDPAddr) {
 			fmt.Printf("error reading %v\n", err)
 			break
 		}
-
-		fmt.Printf("packet size %d from %v\n", n, senderAddr)
 
 		senderLock.Lock()
 		senders[senderAddr.String()] = senderAddr
