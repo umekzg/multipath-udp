@@ -18,7 +18,7 @@ type Muxer struct {
 
 // NewMuxer creates a new uniplex listener muxer
 func NewMuxer(options ...func(*Muxer)) *Muxer {
-	buf := buffer.NewReceiverBuffer(1 * time.Second)
+	buf := buffer.NewReceiverBuffer(300 * time.Millisecond)
 	m := &Muxer{buf: buf, responseCh: make(chan []byte, 128)}
 
 	for _, option := range options {
