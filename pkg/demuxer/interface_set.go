@@ -33,7 +33,7 @@ func (i *InterfaceSet) Add(addr *net.UDPAddr) error {
 		return err
 	}
 	i.Lock()
-	i.connections[getUDPAddrKey(addr)] = c
+	i.connections[getUDPAddrKey(addr)] = c.(*net.UDPConn)
 	i.Unlock()
 	return nil
 }
