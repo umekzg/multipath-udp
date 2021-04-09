@@ -18,7 +18,7 @@ type Muxer struct {
 
 // NewMuxer creates a new uniplex listener muxer
 func NewMuxer(options ...func(*Muxer)) *Muxer {
-	buf := buffer.NewReceiverBuffer(2 * time.Second)
+	buf := buffer.NewReceiverBuffer(1 * time.Second)
 	m := &Muxer{buf: buf, responseCh: make(chan []byte, 128)}
 
 	for _, option := range options {
@@ -50,21 +50,7 @@ func (m *Muxer) writeLoop(dial *net.UDPAddr) {
 				break
 			}
 
-			p, err := srt.Unmarshal(msg[:n])
-			if err != nil {
-				fmt.Printf("failed to unmarshal response %v\n", err)
-				continue
-			}
-
-			switch v := p.(type) {
-			case *srt.ControlPacket:
-				if v.ControlType() != srt.ControlTypeNak {
-					// only send non-nak's upstream.
-					m.responseCh <- p.Marshal()
-				}
-			case *srt.DataPacket:
-				m.responseCh <- p.Marshal()
-			}
+			m.responseCh <- msg[:n]
 		}
 	}()
 

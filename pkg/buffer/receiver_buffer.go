@@ -12,21 +12,14 @@ import (
 type ReceiverBuffer struct {
 	buffer []*EnqueuedPacket
 	count  int
-	head   uint32
 	tail   uint32
 
 	bufferDelay          time.Duration
 	retransmissionDelays []time.Duration
 
 	EmitCh chan srt.Packet
-	LossCh chan *LossReport
 
 	pushCh chan *srt.DataPacket
-}
-
-type LossReport struct {
-	SequenceNumber uint16
-	Count          uint16
 }
 
 type EnqueuedPacket struct {
@@ -42,7 +35,6 @@ func NewReceiverBuffer(bufferDelay time.Duration, retransmissionDelays ...time.D
 		bufferDelay:          bufferDelay,
 		retransmissionDelays: retransmissionDelays,
 		EmitCh:               make(chan srt.Packet, math.MaxUint16),
-		LossCh:               make(chan *LossReport, math.MaxUint16),
 		pushCh:               make(chan *srt.DataPacket, math.MaxUint16),
 	}
 
@@ -69,8 +61,10 @@ func (r *ReceiverBuffer) runEventLoop() {
 					return
 				}
 				// add this packet.
-				if p.SequenceNumber() <= r.tail {
-					// packet too old.
+				if p.SequenceNumber() < r.tail {
+					// packet too old, immediately transmit.
+					fmt.Printf("recovered seq %d\n", p.SequenceNumber())
+					r.EmitCh <- p
 					continue
 				}
 
@@ -80,7 +74,6 @@ func (r *ReceiverBuffer) runEventLoop() {
 						Packet: p,
 						EmitAt: time.Now().Add(r.bufferDelay),
 					})
-					r.head = p.SequenceNumber()
 					r.count++
 				}
 				break
@@ -108,7 +101,6 @@ func (r *ReceiverBuffer) runEventLoop() {
 				Packet: p,
 				EmitAt: time.Now().Add(r.bufferDelay),
 			})
-			r.head = p.SequenceNumber()
 			r.tail = p.SequenceNumber()
 			r.count++
 			continue
@@ -128,5 +120,4 @@ func (r *ReceiverBuffer) Add(p srt.Packet) {
 func (r *ReceiverBuffer) Close() {
 	close(r.pushCh)
 	close(r.EmitCh)
-	close(r.LossCh)
 }

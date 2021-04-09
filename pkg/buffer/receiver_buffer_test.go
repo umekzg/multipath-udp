@@ -71,10 +71,6 @@ func TestReceiverBuffer_Simple(t *testing.T) {
 		t.Errorf("took too long to emit")
 	}
 
-	if len(buf.LossCh) > 0 {
-		t.Errorf("expected no retransmissions")
-	}
-
 	buf.Close()
 	// goleak.VerifyNone(t)
 }
@@ -129,10 +125,6 @@ func TestReceiverBuffer_TwoPackets(t *testing.T) {
 
 	if ts2.Sub(ts1) > 10*time.Millisecond {
 		t.Errorf("took too long to emit")
-	}
-
-	if len(buf.LossCh) > 0 {
-		t.Errorf("expected no retransmissions")
 	}
 
 	buf.Close()
@@ -194,10 +186,6 @@ func TestReceiverBuffer_Deduplicates(t *testing.T) {
 
 	if ts2.Sub(ts1) > 10*time.Millisecond {
 		t.Errorf("took too long to emit")
-	}
-
-	if len(buf.LossCh) > 0 {
-		t.Errorf("expected no retransmissions")
 	}
 
 	buf.Close()
