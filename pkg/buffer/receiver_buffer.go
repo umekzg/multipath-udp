@@ -13,19 +13,21 @@ type ReceiverBuffer struct {
 	sync.RWMutex
 
 	buffer []*rtp.Packet
-	head   int
-	mid    int
-	tail   int
+	count  int
+	tail   uint16
 
-	bufferDelay         time.Duration
-	retransmissionDelay time.Duration
+	bufferDelay          time.Duration
+	retransmissionDelays []time.Duration
 
-	clockRate  uint32
-	timestamp0 uint32
-	clock0     time.Time
+	clockRate    uint32
+	timestamp0   uint32
+	clock0       time.Time
+	minTimestamp uint32
 
 	EmitCh chan *rtp.Packet
 	LossCh chan *LossReport
+
+	pushCh chan *rtp.Packet
 }
 
 type LossReport struct {
@@ -33,141 +35,74 @@ type LossReport struct {
 	Count          uint16
 }
 
-func NewReceiverBuffer(clockRate uint32, bufferDelay, retransmissionDelay time.Duration) *ReceiverBuffer {
+func NewReceiverBuffer(clockRate uint32, bufferDelay time.Duration, retransmissionDelays ...time.Duration) *ReceiverBuffer {
 	// each packet is ~1.5kb, assume an inbound max rate of 60 Mbps => 40k packets/sec
 	buffer := make([]*rtp.Packet, math.MaxUint16)
-	return &ReceiverBuffer{
-		buffer: buffer, head: 0, mid: 0, tail: 0,
-		bufferDelay:         bufferDelay,
-		retransmissionDelay: retransmissionDelay,
-		clockRate:           clockRate,
-		EmitCh:              make(chan *rtp.Packet, math.MaxUint16),
-		LossCh:              make(chan *LossReport, math.MaxUint16),
+
+	r := &ReceiverBuffer{
+		buffer: buffer, tail: 0,
+		bufferDelay:          bufferDelay,
+		retransmissionDelays: retransmissionDelays,
+		clockRate:            clockRate,
+		EmitCh:               make(chan *rtp.Packet, math.MaxUint16),
+		LossCh:               make(chan *LossReport, math.MaxUint16),
+		pushCh:               make(chan *rtp.Packet, math.MaxUint16),
 	}
+
+	go r.runEventLoop()
+
+	return r
 }
 
-func (r *ReceiverBuffer) get(index int) *rtp.Packet {
-	return r.buffer[index%len(r.buffer)]
-}
-
-func (r *ReceiverBuffer) set(index int, p *rtp.Packet) {
-	r.buffer[index%len(r.buffer)] = p
-}
-
-func (r *ReceiverBuffer) isEmpty() bool {
-	return r.get(r.head) == nil
-}
-
-func (r *ReceiverBuffer) runTailLoop() {
+func (r *ReceiverBuffer) runEventLoop() {
 	for {
-		r.Lock()
-		if r.isEmpty() {
-			// the buffer is empty, stop the goroutine.
-			r.Unlock()
-			return
-		}
-		// get the packet at r.tail.
-		p := r.get(r.tail)
-		// compute the expected emission time.
-		dtimestamp := p.Timestamp - r.timestamp0
-		dt := time.Duration(dtimestamp/r.clockRate) * time.Second
-		remaining := r.clock0.Add(dt).Add(r.bufferDelay).Sub(time.Now())
-		// wait until it's supposed to be written.
-		time.Sleep(remaining)
-		// emit the packet.
-		r.EmitCh <- p
-		// move the tail up if necessary.
-		r.set(r.tail, nil)
-		if r.tail < r.head {
-			r.tail++
-		}
+		// get the packet at the tail.
+		if t := r.buffer[r.tail]; t != nil {
+			dtimestamp := t.Timestamp - r.timestamp0
+			dt := time.Duration(dtimestamp/r.clockRate) * time.Second
+			remaining := r.clock0.Add(dt).Add(r.bufferDelay).Sub(time.Now())
+			select {
+			case p := <-r.pushCh:
+				// add this packet.
+				if p.Timestamp <= r.minTimestamp {
+					// packet too old.
+					continue
+				}
 
-		r.Unlock()
-	}
-}
-
-func (r *ReceiverBuffer) runMidLoop() {
-	for {
-		r.Lock()
-		if r.isEmpty() {
-			// the buffer is empty, stop the goroutine.
-			r.Unlock()
-			return
-		} else if r.mid == r.head {
-			// this might end up in an awkward state if the head hasn't read any packets.
-			// so throw in a sleep here to let the tail catch up.
-			time.Sleep(5 * time.Millisecond)
-			r.Unlock()
-			continue
-		}
-		// get the packet at r.tail.
-		p := r.get(r.mid)
-		// compute the expected emission time.
-		dtimestamp := p.Timestamp - r.timestamp0
-		dt := time.Duration(dtimestamp/r.clockRate) * time.Second
-		remaining := r.clock0.Add(dt).Add(r.retransmissionDelay).Sub(time.Now())
-		// wait until it's supposed to be written.
-		time.Sleep(remaining)
-		// move the mid up if necessary, notifying lost packets.
-		if r.mid < r.head {
-			r.mid++
-			count := uint16(0)
-			for r.get(r.mid) == nil {
-				// this packet is missing.
-				count++
-				r.mid++
-			}
-			if count > 0 {
-				r.LossCh <- &LossReport{
-					SequenceNumber: p.SequenceNumber + 1,
-					Count:          count,
+				// insert this packet into the correct spot taking the latest timestamp.
+				if q := r.buffer[p.SequenceNumber]; q == nil {
+					r.buffer[p.SequenceNumber] = p
+					r.count++
+					// progress the head if this packet within r.head + 65536/4
+				}
+				break
+			case <-time.After(remaining):
+				// broadcast the packet at the tail.
+				r.minTimestamp = t.Timestamp
+				r.EmitCh <- t
+				r.buffer[r.tail] = nil
+				r.tail++
+				r.count--
+				if r.count > 0 {
+					for r.buffer[r.tail] == nil {
+						r.tail++
+					}
 				}
 			}
+
+		} else {
+			p := <-r.pushCh
+			// this is the first packet.
+			r.buffer[p.SequenceNumber] = p
+			r.timestamp0 = p.Timestamp
+			r.clock0 = time.Now()
+			r.tail = p.SequenceNumber
+			r.count++
+			continue
 		}
-
-		r.Unlock()
 	}
-
 }
 
 func (r *ReceiverBuffer) Add(p *rtp.Packet) {
-	r.Lock()
-	defer r.Unlock()
-
-	h := r.get(r.head)
-	t := r.get(r.tail)
-
-	if h == nil {
-		// this is the first packet, so insert it and start the eviction listeners.
-		r.set(r.head, p)
-		r.timestamp0 = p.Timestamp
-		r.clock0 = time.Now()
-
-		go r.runTailLoop()
-		go r.runMidLoop()
-
-		return
-	}
-
-	complement := (h.SequenceNumber + math.MaxUint16/2) % math.MaxUint16
-	projectedSequence := int(p.SequenceNumber)
-
-	if p.SequenceNumber < complement {
-		projectedSequence += math.MaxUint16
-	}
-
-	if h.SequenceNumber < p.SequenceNumber {
-		// this packet is in the future. advance the head.
-		delta := projectedSequence - int(h.SequenceNumber)
-		r.head += delta
-		r.set(r.head, p)
-	} else if t.SequenceNumber <= p.SequenceNumber {
-		// insert this packet in the correct spot, taking the latest timestamp.
-		delta := projectedSequence - int(h.SequenceNumber)
-		if q := r.get(r.head + delta); q == nil || q.Timestamp < p.Timestamp {
-			r.set(r.head+delta, p)
-		}
-	} else {
-		// this packet is too old, ignore it. maybe log a warning.
-	}
+	r.pushCh <- p
 }
