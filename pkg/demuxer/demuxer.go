@@ -105,6 +105,7 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 			if a == b {
 				b++
 			}
+			fmt.Printf("using conns %v %v\n", conns[a], conns[b])
 			if _, err := conns[a].Write(msg[:n]); err != nil {
 				fmt.Printf("error writing to socket %v: %v\n", conns[a], err)
 			}
