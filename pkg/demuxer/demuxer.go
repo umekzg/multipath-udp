@@ -2,6 +2,7 @@ package demuxer
 
 import (
 	"fmt"
+	"math/rand"
 	"net"
 	"sync"
 
@@ -76,14 +77,11 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 			break
 		}
 
-		fmt.Printf("packet size %d from %v\n", n, senderAddr)
-
 		p, err := srt.Unmarshal(msg[:n])
 		if p.DestinationSocketId() == 0 {
 			switch v := p.(type) {
 			case *srt.ControlPacket:
 				sourceLock.Lock()
-				fmt.Printf("registering socket %d -> %v\n", v.HandshakeSocketId(), senderAddr)
 				sources[v.HandshakeSocketId()] = senderAddr
 				sourceLock.Unlock()
 			}
@@ -93,9 +91,25 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 			continue
 		}
 		// write to all interfaces.
-		for _, conn := range interfaces.Connections() {
-			if _, err := conn.Write(msg[:n]); err != nil {
-				fmt.Printf("error writing to socket %v: %v\n", conn, err)
+		conns := interfaces.Connections()
+		if len(conns) <= 2 {
+			for _, conn := range conns {
+				if _, err := conn.Write(msg[:n]); err != nil {
+					fmt.Printf("error writing to socket %v: %v\n", conn, err)
+				}
+			}
+		} else {
+			// choose two.
+			a := rand.Intn(len(conns))
+			b := rand.Intn(len(conns) - 1)
+			if a == b {
+				b++
+			}
+			if _, err := conns[a].Write(msg[:n]); err != nil {
+				fmt.Printf("error writing to socket %v: %v\n", conns[a], err)
+			}
+			if _, err := conns[b].Write(msg[:n]); err != nil {
+				fmt.Printf("error writing to socket %v: %v\n", conns[b], err)
 			}
 		}
 	}
