@@ -101,4 +101,6 @@ func TestSenderBuffer(t *testing.T) {
 	if value, err := buf.Get(6); value != 789 {
 		t.Errorf("expected value, got value %v error %v", value, err)
 	}
+
+	// goleak.VerifyNone(t)
 }

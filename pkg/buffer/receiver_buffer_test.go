@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pion/rtp"
+	"github.com/muxfd/multipath-udp/pkg/srt"
 )
 
 func isBufferEmpty(buf *ReceiverBuffer) bool {
@@ -12,12 +12,9 @@ func isBufferEmpty(buf *ReceiverBuffer) bool {
 }
 
 func TestReceiverBuffer_Simple(t *testing.T) {
-	buf := NewReceiverBuffer(90000, 100*time.Millisecond)
-	p1 := &rtp.Packet{
-		Header: rtp.Header{
-			SequenceNumber: 100,
-			Timestamp:      1000,
-		},
+	buf := NewReceiverBuffer(100 * time.Millisecond)
+	p1 := &srt.Packet{
+		SequenceNumber: 100,
 	}
 
 	// check that the buffer emits all three packets after two seconds.
@@ -59,21 +56,18 @@ func TestReceiverBuffer_Simple(t *testing.T) {
 	if len(buf.LossCh) > 0 {
 		t.Errorf("expected no retransmissions")
 	}
+
+	buf.Close()
+	// goleak.VerifyNone(t)
 }
 
 func TestReceiverBuffer_TwoPackets(t *testing.T) {
-	buf := NewReceiverBuffer(90000, 100*time.Millisecond)
-	p1 := &rtp.Packet{
-		Header: rtp.Header{
-			SequenceNumber: 100,
-			Timestamp:      1000,
-		},
+	buf := NewReceiverBuffer(100 * time.Millisecond)
+	p1 := &srt.Packet{
+		SequenceNumber: 100,
 	}
-	p2 := &rtp.Packet{
-		Header: rtp.Header{
-			SequenceNumber: 101,
-			Timestamp:      1000,
-		},
+	p2 := &srt.Packet{
+		SequenceNumber: 101,
 	}
 
 	// check that the buffer emits all three packets after two seconds.
@@ -120,27 +114,21 @@ func TestReceiverBuffer_TwoPackets(t *testing.T) {
 	if len(buf.LossCh) > 0 {
 		t.Errorf("expected no retransmissions")
 	}
+
+	buf.Close()
+	// goleak.VerifyNone(t)
 }
 
 func TestReceiverBuffer_Deduplicates(t *testing.T) {
-	buf := NewReceiverBuffer(90000, 100*time.Millisecond)
-	p1 := &rtp.Packet{
-		Header: rtp.Header{
-			SequenceNumber: 100,
-			Timestamp:      1000,
-		},
+	buf := NewReceiverBuffer(100 * time.Millisecond)
+	p1 := &srt.Packet{
+		SequenceNumber: 100,
 	}
-	p2 := &rtp.Packet{
-		Header: rtp.Header{
-			SequenceNumber: 101,
-			Timestamp:      1000,
-		},
+	p2 := &srt.Packet{
+		SequenceNumber: 101,
 	}
-	p3 := &rtp.Packet{
-		Header: rtp.Header{
-			SequenceNumber: 100,
-			Timestamp:      1000,
-		},
+	p3 := &srt.Packet{
+		SequenceNumber: 100,
 	}
 
 	// check that the buffer emits all three packets after two seconds.
@@ -188,4 +176,7 @@ func TestReceiverBuffer_Deduplicates(t *testing.T) {
 	if len(buf.LossCh) > 0 {
 		t.Errorf("expected no retransmissions")
 	}
+
+	buf.Close()
+	// goleak.VerifyNone(t)
 }
