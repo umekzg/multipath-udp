@@ -2,7 +2,6 @@ package demuxer
 
 import (
 	"fmt"
-	"math/rand"
 	"net"
 	"sync"
 
@@ -91,26 +90,9 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 			continue
 		}
 		// write to all interfaces.
-		conns := interfaces.Connections()
-		if len(conns) <= 2 {
-			for _, conn := range conns {
-				if _, err := conn.Write(msg[:n]); err != nil {
-					fmt.Printf("error writing to socket %v: %v\n", conn, err)
-				}
-			}
-		} else {
-			// choose two.
-			a := rand.Intn(len(conns))
-			b := rand.Intn(len(conns) - 1)
-			if a == b {
-				b++
-			}
-			fmt.Printf("using conns %v %v\n", conns[a], conns[b])
-			if _, err := conns[a].Write(msg[:n]); err != nil {
-				fmt.Printf("error writing to socket %v: %v\n", conns[a], err)
-			}
-			if _, err := conns[b].Write(msg[:n]); err != nil {
-				fmt.Printf("error writing to socket %v: %v\n", conns[b], err)
+		for _, conn := range interfaces.Connections() {
+			if _, err := conn.Write(msg[:n]); err != nil {
+				fmt.Printf("error writing to socket %v: %v\n", conn, err)
 			}
 		}
 	}
