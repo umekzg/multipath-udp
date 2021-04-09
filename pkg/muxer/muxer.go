@@ -1,7 +1,6 @@
 package muxer
 
 import (
-	"encoding/hex"
 	"fmt"
 	"net"
 	"sync"
@@ -126,7 +125,7 @@ func (m *Muxer) readLoop(listen *net.UDPAddr) {
 		fmt.Printf("packet size %d from %v\n", n, senderAddr)
 
 		senderLock.Lock()
-		senders[hex.EncodeToString(senderAddr.IP.To16())] = senderAddr
+		senders[senderAddr.String()] = senderAddr
 		senderLock.Unlock()
 
 		p, err := srt.Unmarshal(msg[:n])

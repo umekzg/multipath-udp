@@ -79,10 +79,14 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 		fmt.Printf("packet size %d from %v\n", n, senderAddr)
 
 		p, err := srt.Unmarshal(msg[:n])
-		if p.DestinationSocketId() > 0 {
-			sourceLock.Lock()
-			sources[p.DestinationSocketId()] = senderAddr
-			sourceLock.Unlock()
+		if p.DestinationSocketId() == 0 {
+			switch v := p.(type) {
+			case *srt.ControlPacket:
+				sourceLock.Lock()
+				fmt.Printf("registering socket %d -> %v", v.HandshakeSocketId(), senderAddr)
+				sources[v.HandshakeSocketId()] = senderAddr
+				sourceLock.Unlock()
+			}
 		}
 		if err != nil {
 			fmt.Printf("error unmarshalling rtp packet %v\n", err)

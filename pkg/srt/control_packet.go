@@ -47,3 +47,7 @@ func (p ControlPacket) Timestamp() uint32 {
 func (p ControlPacket) DestinationSocketId() uint32 {
 	return binary.BigEndian.Uint32(p.rawPacket[12:16])
 }
+
+func (p ControlPacket) HandshakeSocketId() uint32 {
+	return binary.BigEndian.Uint32(p.rawPacket[44:48])
+}
