@@ -76,9 +76,13 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 			break
 		}
 
+		fmt.Printf("packet size %d from %v\n", n, senderAddr)
+
 		p, err := srt.Unmarshal(msg[:n])
 		if p.DestinationSocketId() > 0 {
+			sourceLock.Lock()
 			sources[p.DestinationSocketId()] = senderAddr
+			sourceLock.Unlock()
 		}
 		if err != nil {
 			fmt.Printf("error unmarshalling rtp packet %v\n", err)

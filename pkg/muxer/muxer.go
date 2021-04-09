@@ -123,6 +123,8 @@ func (m *Muxer) readLoop(listen *net.UDPAddr) {
 			break
 		}
 
+		fmt.Printf("packet size %d from %v\n", n, senderAddr)
+
 		senderLock.Lock()
 		senders[hex.EncodeToString(senderAddr.IP.To16())] = senderAddr
 		senderLock.Unlock()
