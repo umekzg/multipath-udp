@@ -41,7 +41,7 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 
 	var sourceLock sync.Mutex
 	sources := make(map[uint32]*net.UDPAddr)
-	interfaces := NewInterfaceSet(dial)
+	interfaces := NewInterfaceSet(dial, d.responseCh)
 	if d.interfaceBinder != nil {
 		close := d.interfaceBinder.Bind(interfaces.Add, interfaces.Remove, dial)
 		defer close()

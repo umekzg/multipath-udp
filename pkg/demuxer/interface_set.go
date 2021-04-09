@@ -11,10 +11,11 @@ type InterfaceSet struct {
 	sync.RWMutex
 	raddr       *net.UDPAddr
 	connections map[string]*net.UDPConn
+	responseCh  chan []byte
 }
 
-func NewInterfaceSet(raddr *net.UDPAddr) *InterfaceSet {
-	return &InterfaceSet{connections: make(map[string]*net.UDPConn), raddr: raddr}
+func NewInterfaceSet(raddr *net.UDPAddr, responseCh chan []byte) *InterfaceSet {
+	return &InterfaceSet{connections: make(map[string]*net.UDPConn), raddr: raddr, responseCh: responseCh}
 }
 
 func getUDPAddrKey(addr *net.UDPAddr) string {
@@ -32,8 +33,19 @@ func (i *InterfaceSet) Add(addr *net.UDPAddr) error {
 	if err != nil {
 		return err
 	}
+	w := c.(*net.UDPConn)
+	go func() {
+		for {
+			msg := make([]byte, 2048)
+			n, err := w.Read(msg)
+			if err != nil {
+				break
+			}
+			i.responseCh <- msg[:n]
+		}
+	}()
 	i.Lock()
-	i.connections[getUDPAddrKey(addr)] = c.(*net.UDPConn)
+	i.connections[getUDPAddrKey(addr)] = w
 	i.Unlock()
 	return nil
 }
