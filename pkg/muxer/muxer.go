@@ -84,12 +84,13 @@ func (m *Muxer) readLoop(listen *net.UDPAddr) {
 				break
 			}
 
-			fmt.Printf("senders %v\n", senders)
-
 			// broadcast to all senders since this is a control packet.
 			senderLock.Lock()
 			for _, sender := range senders {
-				r.WriteToUDP(msg, sender)
+				if _, err := r.WriteToUDP(msg, sender); err != nil {
+					fmt.Printf("sender %v closed\n", sender)
+					delete(senders, sender.String())
+				}
 			}
 			senderLock.Unlock()
 		}
