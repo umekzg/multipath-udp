@@ -50,7 +50,29 @@ func (m *Muxer) writeLoop(dial *net.UDPAddr) {
 				fmt.Printf("failed to read response %v\n", err)
 				break
 			}
-			m.responseCh <- msg[:n]
+
+			p, err := srt.Unmarshal(msg[:n])
+			if err != nil {
+				fmt.Printf("failed to unmarshal response %v\n", err)
+				continue
+			}
+
+			if !p.IsControl {
+				// send all data packets upstream.
+				m.responseCh <- p.Marshal()
+				continue
+			}
+
+			c, err := p.ToControlPacket()
+			if err != nil {
+				fmt.Printf("failed to convert response %v\n", err)
+				continue
+			}
+
+			if c.ControlType != srt.ControlTypeNak {
+				// only send non-nak's upstream.
+				m.responseCh <- p.Marshal()
+			}
 		}
 	}()
 
@@ -111,6 +133,8 @@ func (m *Muxer) readLoop(listen *net.UDPAddr) {
 			fmt.Printf("error unmarshalling rtp packet %v\n", err)
 			continue
 		}
+
+		m.buf.Add(p)
 	}
 }
 

@@ -63,7 +63,6 @@ func (r *ReceiverBuffer) runEventLoop() {
 	for {
 		// get the packet at the tail.
 		if t := r.get(r.tail); t != nil {
-			remaining := time.Until(t.EmitAt)
 			select {
 			case p, ok := <-r.pushCh:
 				if !ok {
@@ -86,7 +85,7 @@ func (r *ReceiverBuffer) runEventLoop() {
 					// progress the head if this packet within r.head + 65536/4
 				}
 				break
-			case <-time.After(remaining):
+			case <-time.After(time.Until(t.EmitAt)):
 				// broadcast the packet at the tail.
 				fmt.Printf("tail seq: %d\n", t.Packet.SequenceNumber)
 				r.EmitCh <- t.Packet
