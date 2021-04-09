@@ -6,13 +6,12 @@ import (
 	"time"
 )
 
-func tryDial(laddr *net.UDPAddr, raddr string) bool {
-	d := net.Dialer{LocalAddr: laddr, Timeout: 5 * time.Second}
-	_, err := d.Dial("udp", raddr)
+func tryDial(laddr, raddr *net.UDPAddr) bool {
+	_, err := net.DialUDP("udp", laddr, raddr)
 	return err == nil
 }
 
-func getAddresses(source func() ([]net.Interface, error), raddr string) ([]*net.UDPAddr, error) {
+func getAddresses(source func() ([]net.Interface, error), raddr *net.UDPAddr) ([]*net.UDPAddr, error) {
 	var addrs []*net.UDPAddr
 	ifaces, err := source()
 	if err != nil {
@@ -69,8 +68,8 @@ type AutoBinder struct {
 }
 
 // NewAutoBinder returns a new AutoBinder with the given config.
-func NewAutoBinder(source func() ([]net.Interface, error), pollPeriod time.Duration) AutoBinder {
-	return AutoBinder{
+func NewAutoBinder(source func() ([]net.Interface, error), pollPeriod time.Duration) *AutoBinder {
+	return &AutoBinder{
 		source:     source,
 		pollPeriod: pollPeriod,
 	}
@@ -78,7 +77,7 @@ func NewAutoBinder(source func() ([]net.Interface, error), pollPeriod time.Durat
 
 // Bind begins binding the AutoBinder to the two difference functions,
 // calling add when a new interface is added and sub when an interface is removed.
-func (b *AutoBinder) Bind(add, sub func(*net.UDPAddr), raddr string) func() {
+func (b *AutoBinder) Bind(add, sub func(*net.UDPAddr) error, raddr *net.UDPAddr) func() {
 	currAddrs, err := getAddresses(b.source, raddr)
 	if err != nil {
 		fmt.Printf("error fetching local addresses: %v\n", err)
@@ -88,7 +87,9 @@ func (b *AutoBinder) Bind(add, sub func(*net.UDPAddr), raddr string) func() {
 	}
 	currAddrSet := makeSet(currAddrs)
 	for _, iface := range currAddrSet {
-		add(iface)
+		if err := add(iface); err != nil {
+			fmt.Printf("error adding interface: %v\n", err)
+		}
 	}
 	quit := make(chan bool)
 
@@ -105,10 +106,14 @@ func (b *AutoBinder) Bind(add, sub func(*net.UDPAddr), raddr string) func() {
 				}
 				nextAddrSet := makeSet(nextAddrs)
 				for _, addr := range diff(currAddrSet, nextAddrSet) {
-					sub(addr)
+					if err := sub(addr); err != nil {
+						fmt.Printf("error adding interface: %v\n", err)
+					}
 				}
 				for _, addr := range diff(nextAddrSet, currAddrSet) {
-					add(addr)
+					if err := add(addr); err != nil {
+						fmt.Printf("error adding interface: %v\n", err)
+					}
 				}
 				currAddrs = nextAddrs
 				currAddrSet = nextAddrSet

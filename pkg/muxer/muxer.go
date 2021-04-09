@@ -57,20 +57,13 @@ func (m *Muxer) writeLoop(dial *net.UDPAddr) {
 				continue
 			}
 
-			if !p.IsControl {
-				// send all data packets upstream.
-				m.responseCh <- p.Marshal()
-				continue
-			}
-
-			c, err := p.ToControlPacket()
-			if err != nil {
-				fmt.Printf("failed to convert response %v\n", err)
-				continue
-			}
-
-			if c.ControlType != srt.ControlTypeNak {
-				// only send non-nak's upstream.
+			switch v := p.(type) {
+			case *srt.ControlPacket:
+				if v.ControlType() != srt.ControlTypeNak {
+					// only send non-nak's upstream.
+					m.responseCh <- p.Marshal()
+				}
+			case *srt.DataPacket:
 				m.responseCh <- p.Marshal()
 			}
 		}
@@ -81,7 +74,13 @@ func (m *Muxer) writeLoop(dial *net.UDPAddr) {
 		if !ok {
 			break
 		}
-		fmt.Printf("seq: %d\n", p.SequenceNumber)
+
+		switch v := p.(type) {
+		case *srt.ControlPacket:
+			fmt.Printf("control packet\n")
+		case *srt.DataPacket:
+			fmt.Printf("seq: %d\n", v.SequenceNumber())
+		}
 		if _, err := w.Write(p.Marshal()); err != nil {
 			fmt.Printf("failed to write packet %v\n", err)
 		}

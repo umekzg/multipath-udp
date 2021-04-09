@@ -18,10 +18,10 @@ type ReceiverBuffer struct {
 	bufferDelay          time.Duration
 	retransmissionDelays []time.Duration
 
-	EmitCh chan *srt.Packet
+	EmitCh chan srt.Packet
 	LossCh chan *LossReport
 
-	pushCh chan *srt.Packet
+	pushCh chan *srt.DataPacket
 }
 
 type LossReport struct {
@@ -30,7 +30,7 @@ type LossReport struct {
 }
 
 type EnqueuedPacket struct {
-	Packet *srt.Packet
+	Packet *srt.DataPacket
 	EmitAt time.Time
 }
 
@@ -41,9 +41,9 @@ func NewReceiverBuffer(bufferDelay time.Duration, retransmissionDelays ...time.D
 		buffer:               buffer,
 		bufferDelay:          bufferDelay,
 		retransmissionDelays: retransmissionDelays,
-		EmitCh:               make(chan *srt.Packet, math.MaxUint16),
+		EmitCh:               make(chan srt.Packet, math.MaxUint16),
 		LossCh:               make(chan *LossReport, math.MaxUint16),
-		pushCh:               make(chan *srt.Packet, math.MaxUint16),
+		pushCh:               make(chan *srt.DataPacket, math.MaxUint16),
 	}
 
 	go r.runEventLoop()
@@ -69,15 +69,15 @@ func (r *ReceiverBuffer) runEventLoop() {
 					return
 				}
 				// add this packet.
-				if p.SequenceNumber <= t.Packet.SequenceNumber {
+				if p.SequenceNumber() <= t.Packet.SequenceNumber() {
 					// packet too old.
 					continue
 				}
 
 				// insert this packet into the correct spot taking the latest timestamp.
-				if q := r.get(p.SequenceNumber); q == nil {
-					fmt.Printf("adding seq %d\n", p.SequenceNumber)
-					r.set(p.SequenceNumber, &EnqueuedPacket{
+				if q := r.get(p.SequenceNumber()); q == nil {
+					fmt.Printf("adding seq %d\n", p.SequenceNumber())
+					r.set(p.SequenceNumber(), &EnqueuedPacket{
 						Packet: p,
 						EmitAt: time.Now().Add(r.bufferDelay),
 					})
@@ -87,7 +87,7 @@ func (r *ReceiverBuffer) runEventLoop() {
 				break
 			case <-time.After(time.Until(t.EmitAt)):
 				// broadcast the packet at the tail.
-				fmt.Printf("tail seq: %d\n", t.Packet.SequenceNumber)
+				fmt.Printf("tail seq: %d\n", t.Packet.SequenceNumber())
 				r.EmitCh <- t.Packet
 				r.set(r.tail, nil)
 				r.tail++
@@ -105,24 +105,24 @@ func (r *ReceiverBuffer) runEventLoop() {
 				return
 			}
 			// this is the first packet.
-			fmt.Printf("adding seq %d\n", p.SequenceNumber)
-			r.set(p.SequenceNumber, &EnqueuedPacket{
+			fmt.Printf("adding seq %d\n", p.SequenceNumber())
+			r.set(p.SequenceNumber(), &EnqueuedPacket{
 				Packet: p,
 				EmitAt: time.Now().Add(r.bufferDelay),
 			})
-			r.tail = p.SequenceNumber
+			r.tail = p.SequenceNumber()
 			r.count++
 			continue
 		}
 	}
 }
 
-func (r *ReceiverBuffer) Add(p *srt.Packet) {
-	if p.IsControl {
-		// forward control packets immediately
-		r.EmitCh <- p
-	} else {
-		r.pushCh <- p
+func (r *ReceiverBuffer) Add(p srt.Packet) {
+	switch v := p.(type) {
+	case *srt.DataPacket:
+		r.pushCh <- v
+	case *srt.ControlPacket:
+		r.EmitCh <- v
 	}
 }
 

@@ -1,6 +1,8 @@
 package buffer
 
 import (
+	"encoding/binary"
+	"errors"
 	"testing"
 	"time"
 
@@ -11,10 +13,26 @@ func isBufferEmpty(buf *ReceiverBuffer) bool {
 	return buf.buffer[buf.tail] == nil
 }
 
+func newDataPacket(seq uint32) (*srt.DataPacket, error) {
+	b := make([]byte, 16)
+	binary.BigEndian.PutUint32(b, seq)
+	p, err := srt.Unmarshal(b)
+	if err != nil {
+		return nil, err
+	}
+	switch v := p.(type) {
+	case *srt.DataPacket:
+		return v, nil
+	default:
+		return nil, errors.New("invalid packet")
+	}
+}
+
 func TestReceiverBuffer_Simple(t *testing.T) {
 	buf := NewReceiverBuffer(100 * time.Millisecond)
-	p1 := &srt.Packet{
-		SequenceNumber: 100,
+	p1, err := newDataPacket(100)
+	if err != nil {
+		t.Errorf("failed to create packet %v\n", err)
 	}
 
 	// check that the buffer emits all three packets after two seconds.
@@ -63,11 +81,13 @@ func TestReceiverBuffer_Simple(t *testing.T) {
 
 func TestReceiverBuffer_TwoPackets(t *testing.T) {
 	buf := NewReceiverBuffer(100 * time.Millisecond)
-	p1 := &srt.Packet{
-		SequenceNumber: 100,
+	p1, err := newDataPacket(100)
+	if err != nil {
+		t.Errorf("failed to create packet %v\n", err)
 	}
-	p2 := &srt.Packet{
-		SequenceNumber: 101,
+	p2, err := newDataPacket(101)
+	if err != nil {
+		t.Errorf("failed to create packet %v\n", err)
 	}
 
 	// check that the buffer emits all three packets after two seconds.
@@ -121,14 +141,17 @@ func TestReceiverBuffer_TwoPackets(t *testing.T) {
 
 func TestReceiverBuffer_Deduplicates(t *testing.T) {
 	buf := NewReceiverBuffer(100 * time.Millisecond)
-	p1 := &srt.Packet{
-		SequenceNumber: 100,
+	p1, err := newDataPacket(100)
+	if err != nil {
+		t.Errorf("failed to create packet %v\n", err)
 	}
-	p2 := &srt.Packet{
-		SequenceNumber: 101,
+	p2, err := newDataPacket(101)
+	if err != nil {
+		t.Errorf("failed to create packet %v\n", err)
 	}
-	p3 := &srt.Packet{
-		SequenceNumber: 100,
+	p3, err := newDataPacket(100)
+	if err != nil {
+		t.Errorf("failed to create packet %v\n", err)
 	}
 
 	// check that the buffer emits all three packets after two seconds.

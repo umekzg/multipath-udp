@@ -6,9 +6,7 @@ import (
 	"net"
 	"os"
 
-	"github.com/muxfd/multipath-udp/pkg/deduplicator"
 	"github.com/muxfd/multipath-udp/pkg/demuxer"
-	"github.com/muxfd/multipath-udp/pkg/scheduler"
 )
 
 var (
@@ -54,16 +52,7 @@ func main() {
 
 	fmt.Printf("listening to %s forwarding to %s\n", inputAddr, outputAddr)
 
-	dedup, err := deduplicator.NewSrtDeduplicator(10000)
-	if err != nil {
-		panic(err)
-	}
+	demuxer.NewDemuxer().Start(inputAddr, outputAddr)
 
-	m := demuxer.NewDemuxer(
-		inputAddr, outputAddr,
-		demuxer.AutoBindInterfaces(output),
-		demuxer.WithDeduplicator(dedup),
-		demuxer.WithScheduler(scheduler.NewDoubleScheduler()))
-
-	m.Wait()
+	select {}
 }
