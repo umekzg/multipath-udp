@@ -2,6 +2,7 @@ package demuxer
 
 import (
 	"fmt"
+	"math/rand"
 	"net"
 	"sync"
 
@@ -91,10 +92,38 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 			fmt.Printf("error unmarshalling rtp packet %v\n", err)
 			continue
 		}
-		// write to all interfaces.
-		for _, conn := range interfaces.Connections() {
-			if _, err := conn.Write(msg[:n]); err != nil {
-				fmt.Printf("error writing to socket %v: %v\n", conn, err)
+		conns := interfaces.Connections()
+		switch p.(type) {
+		case *srt.DataPacket:
+			if len(conns) <= 2 {
+				// write to all interfaces.
+				for _, conn := range conns {
+					if _, err := conn.Write(msg[:n]); err != nil {
+						fmt.Printf("error writing to socket %v: %v\n", conn, err)
+					}
+				}
+			} else {
+				// pick two.
+				a := rand.Intn(len(conns))
+				if _, err := conns[a].Write(msg[:n]); err != nil {
+					fmt.Printf("error writing to socket %v: %v\n", conns[a], err)
+				}
+				if _, err := conns[(a+1)%len(conns)].Write(msg[:n]); err != nil {
+					fmt.Printf("error writing to socket %v: %v\n", conns[(a+1)%len(conns)], err)
+				}
+			}
+		case *srt.ControlPacket:
+			// pick a random connection.
+			i := rand.Intn(len(conns))
+			for _, conn := range conns {
+				if i == 0 {
+					if _, err := conn.Write(msg[:n]); err != nil {
+						fmt.Printf("error writing to socket %v: %v\n", conn, err)
+					}
+					break
+				} else {
+					i--
+				}
 			}
 		}
 	}

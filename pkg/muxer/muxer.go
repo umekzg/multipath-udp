@@ -2,6 +2,7 @@ package muxer
 
 import (
 	"fmt"
+	"math/rand"
 	"net"
 	"sync"
 	"time"
@@ -88,10 +89,32 @@ func (m *Muxer) readLoop(listen *net.UDPAddr) {
 
 			// broadcast to all senders since this is a control packet.
 			senderLock.Lock()
-			for _, sender := range senders {
-				if _, err := r.WriteToUDP(msg, sender); err != nil {
-					fmt.Printf("sender %v closed\n", sender)
-					delete(senders, sender.String())
+			p, err := srt.Unmarshal(msg)
+			if err != nil {
+				fmt.Printf("not an srt packet: %v\n", err)
+				continue
+			}
+			switch p.(type) {
+			case *srt.DataPacket:
+				for _, sender := range senders {
+					if _, err := r.WriteToUDP(msg, sender); err != nil {
+						fmt.Printf("sender %v closed\n", sender)
+						delete(senders, sender.String())
+					}
+				}
+			case *srt.ControlPacket:
+				// pick a random socket.
+				i := rand.Intn(len(senders))
+				for _, sender := range senders {
+					if i == 0 {
+						if _, err := r.WriteToUDP(msg, sender); err != nil {
+							fmt.Printf("sender %v closed\n", sender)
+							delete(senders, sender.String())
+						}
+						break
+					} else {
+						i--
+					}
 				}
 			}
 			senderLock.Unlock()
