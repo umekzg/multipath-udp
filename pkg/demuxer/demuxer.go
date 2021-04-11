@@ -80,6 +80,10 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 		}
 
 		p, err := srt.Unmarshal(msg[:n])
+		if err != nil {
+			fmt.Printf("error unmarshaling srt packet %v\n", err)
+			continue
+		}
 		if p.DestinationSocketId() == 0 {
 			switch v := p.(type) {
 			case *srt.ControlPacket:
