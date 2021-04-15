@@ -2,6 +2,7 @@ package demuxer
 
 import (
 	"fmt"
+	"math"
 	"math/rand"
 	"net"
 	"sync"
@@ -132,7 +133,7 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 				rateLock.Lock()
 				for i, c := range conns {
 					if x, ok := rates[c.LocalAddr().String()]; ok {
-						w[i] = float64(x)
+						w[i] = math.Log2(math.Max(float64(x), 1))
 					} else {
 						w[i] = 1
 					}
