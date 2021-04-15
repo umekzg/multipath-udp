@@ -133,7 +133,7 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 				rateLock.Lock()
 				for i, c := range conns {
 					if x, ok := rates[c.LocalAddr().String()]; ok {
-						w[i] = math.Log2(math.Max(float64(x), 1))
+						w[i] = math.Log2(math.Max(float64(x), 2))
 					} else {
 						w[i] = 1
 					}
