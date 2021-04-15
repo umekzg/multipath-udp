@@ -77,6 +77,7 @@ func (m *Muxer) readLoop(listen *net.UDPAddr) {
 	r.SetWriteBuffer(1024 * 1024)
 
 	senders := make(map[string]*net.UDPAddr)
+	handshaken := false
 	var senderLock sync.Mutex
 
 	go func() {
@@ -94,7 +95,7 @@ func (m *Muxer) readLoop(listen *net.UDPAddr) {
 				fmt.Printf("not an srt packet: %v\n", err)
 				continue
 			}
-			switch p.(type) {
+			switch v := p.(type) {
 			case *srt.DataPacket:
 				for _, sender := range senders {
 					if _, err := r.WriteToUDP(msg, sender); err != nil {
@@ -104,6 +105,9 @@ func (m *Muxer) readLoop(listen *net.UDPAddr) {
 				}
 			case *srt.ControlPacket:
 				// pick a random socket.
+				if v.ControlType() == srt.ControlTypeHandshake {
+					handshaken = true
+				}
 				i := rand.Intn(len(senders))
 				for _, sender := range senders {
 					if i == 0 {
@@ -121,6 +125,10 @@ func (m *Muxer) readLoop(listen *net.UDPAddr) {
 		}
 	}()
 
+	// measure bitrate in 2-second blocks.
+	expiration := time.Now().Add(1 * time.Second)
+	counts := make(map[string]int)
+
 	for {
 		msg := make([]byte, 2048)
 
@@ -134,10 +142,37 @@ func (m *Muxer) readLoop(listen *net.UDPAddr) {
 		senders[senderAddr.String()] = senderAddr
 		senderLock.Unlock()
 
+		if expiration.Before(time.Now()) {
+			// broadcast statistics downstream.
+			if handshaken {
+				go func(counts map[string]int) {
+					for senderAddr, ct := range counts {
+						fmt.Printf("%v recv ct %v\n", senderAddr, ct)
+						p := srt.NewMultipathAckControlPacket(uint32(ct))
+						senderLock.Lock()
+						if sender, ok := senders[senderAddr]; ok {
+							r.WriteToUDP(p.Marshal(), sender)
+						}
+						senderLock.Unlock()
+					}
+				}(counts)
+			}
+			counts = make(map[string]int)
+			expiration = time.Now().Add(1 * time.Second)
+		}
+
+		counts[senderAddr.String()] += 1
+
 		p, err := srt.Unmarshal(msg[:n])
 		if err != nil {
 			fmt.Printf("error unmarshalling rtp packet %v\n", err)
 			continue
+		}
+		switch v := p.(type) {
+		case *srt.ControlPacket:
+			if v.ControlType() == srt.ControlTypeHandshake {
+				handshaken = false
+			}
 		}
 
 		m.buf.Add(p)

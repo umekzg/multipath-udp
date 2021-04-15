@@ -8,18 +8,19 @@ import (
 
 	"github.com/muxfd/multipath-udp/pkg/interfaces"
 	"github.com/muxfd/multipath-udp/pkg/srt"
+	"gonum.org/v1/gonum/stat/sampleuv"
 )
 
 // Demuxer represents a UDP stream demuxer that demuxes a source over multiple senders.
 type Demuxer struct {
-	responseCh chan []byte
+	responseCh chan *Message
 
 	interfaceBinder *interfaces.AutoBinder
 }
 
 // NewDemuxer creates a new demuxer.
 func NewDemuxer(options ...func(*Demuxer)) *Demuxer {
-	d := &Demuxer{responseCh: make(chan []byte, 1024)}
+	d := &Demuxer{responseCh: make(chan *Message, 1024)}
 
 	for _, option := range options {
 		option(d)
@@ -48,6 +49,9 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 		defer close()
 	}
 
+	rates := make(map[string]uint32)
+	var rateLock sync.Mutex
+
 	go func() {
 		for {
 			msg, ok := <-d.responseCh
@@ -55,14 +59,26 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 				fmt.Printf("response channel closed\n")
 				break
 			}
-			p, err := srt.Unmarshal(msg)
+			p, err := srt.Unmarshal(msg.msg)
 			if err != nil {
 				fmt.Printf("error unmarshaling packet: %v\n", err)
 				continue
 			}
+			switch v := p.(type) {
+			case *srt.ControlPacket:
+				if v.ControlType() == srt.ControlTypeUserDefined && v.Subtype() == srt.SubtypeMultipathAck {
+					rateLock.Lock()
+					fmt.Printf("%v %v\n", msg.addr, v.TypeSpecificInformation())
+					rates[msg.addr] = v.TypeSpecificInformation()
+					rateLock.Unlock()
+				}
+			}
 			sourceLock.Lock()
+			// this is kind of weird.
+			d := make([]byte, len(msg.msg))
+			copy(d, msg.msg)
 			if source, ok := sources[p.DestinationSocketId()]; ok {
-				if _, err := r.WriteToUDP(msg, source); err != nil {
+				if _, err := r.WriteToUDP(d, source); err != nil {
 					fmt.Printf("error writing to udp: %v\n", err)
 				}
 			}
@@ -103,7 +119,7 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 		}
 		switch p.(type) {
 		case *srt.DataPacket:
-			if len(conns) <= 2 {
+			if len(conns) <= 1 {
 				// write to all interfaces.
 				for _, conn := range conns {
 					if _, err := conn.Write(msg[:n]); err != nil {
@@ -112,11 +128,30 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 				}
 			} else {
 				// pick two.
-				a := rand.Intn(len(conns))
+				w := make([]float64, len(conns))
+				rateLock.Lock()
+				for i, c := range conns {
+					if x, ok := rates[c.LocalAddr().String()]; ok {
+						w[i] = float64(x)
+					} else {
+						w[i] = 1
+					}
+				}
+				rateLock.Unlock()
+				rng := sampleuv.NewWeighted(w, nil)
+				a, ok := rng.Take()
+				if !ok {
+					fmt.Printf("error sampling weights %v", w)
+				}
+				b, ok := rng.Take()
+				if !ok {
+					fmt.Printf("error sampling weights %v", w)
+				}
+				// fmt.Printf("using %v %v\n", w, rates)
 				if _, err := conns[a].Write(msg[:n]); err != nil {
 					fmt.Printf("error writing to socket %v: %v\n", conns[a], err)
 				}
-				if _, err := conns[(a+1)%len(conns)].Write(msg[:n]); err != nil {
+				if _, err := conns[b].Write(msg[:n]); err != nil {
 					fmt.Printf("error writing to socket %v: %v\n", conns[(a+1)%len(conns)], err)
 				}
 			}

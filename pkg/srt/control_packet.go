@@ -7,17 +7,34 @@ import (
 
 type ControlType uint16
 
+type Subtype uint16
+
 const (
-	ControlTypeHandshake ControlType = 0x0000
-	ControlTypeKeepalive ControlType = 0x0001
-	ControlTypeAck       ControlType = 0x0002
-	ControlTypeNak       ControlType = 0x0003
-	ControlTypeShutdown  ControlType = 0x0005
-	ControlTypeAckack    ControlType = 0x0006
+	ControlTypeHandshake   ControlType = 0x0000
+	ControlTypeKeepalive   ControlType = 0x0001
+	ControlTypeAck         ControlType = 0x0002
+	ControlTypeNak         ControlType = 0x0003
+	ControlTypeShutdown    ControlType = 0x0005
+	ControlTypeAckack      ControlType = 0x0006
+	ControlTypeUserDefined ControlType = 0x7FFF
+)
+
+const (
+	SubtypeMultipathAck Subtype = 0x0002
 )
 
 type ControlPacket struct {
 	rawPacket []byte
+}
+
+func NewMultipathAckControlPacket(pps uint32) *ControlPacket {
+	pkt := make([]byte, 16)
+	pkt[0] = 0xFF
+	pkt[1] = 0xFF
+	pkt[2] = 0x00
+	pkt[3] = 0x02
+	binary.BigEndian.PutUint32(pkt[4:8], pps)
+	return &ControlPacket{rawPacket: pkt}
 }
 
 func (p *ControlPacket) Unmarshal(rawPacket []byte) error {
@@ -36,8 +53,12 @@ func (p ControlPacket) ControlType() ControlType {
 	return ControlType(binary.BigEndian.Uint16(p.rawPacket[:2]) & 0x7FFF)
 }
 
-func (p ControlPacket) Subtype() uint16 {
-	return binary.BigEndian.Uint16(p.rawPacket[2:4])
+func (p ControlPacket) Subtype() Subtype {
+	return Subtype(binary.BigEndian.Uint16(p.rawPacket[2:4]))
+}
+
+func (p ControlPacket) TypeSpecificInformation() uint32 {
+	return binary.BigEndian.Uint32(p.rawPacket[4:8])
 }
 
 func (p ControlPacket) Timestamp() uint32 {

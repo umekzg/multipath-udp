@@ -7,14 +7,19 @@ import (
 	"sync"
 )
 
+type Message struct {
+	addr string
+	msg  []byte
+}
+
 type InterfaceSet struct {
 	sync.RWMutex
 	raddr       *net.UDPAddr
 	connections map[string]*net.UDPConn
-	responseCh  chan []byte
+	responseCh  chan *Message
 }
 
-func NewInterfaceSet(raddr *net.UDPAddr, responseCh chan []byte) *InterfaceSet {
+func NewInterfaceSet(raddr *net.UDPAddr, responseCh chan *Message) *InterfaceSet {
 	return &InterfaceSet{connections: make(map[string]*net.UDPConn), raddr: raddr, responseCh: responseCh}
 }
 
@@ -41,7 +46,7 @@ func (i *InterfaceSet) Add(addr *net.UDPAddr) error {
 			if err != nil {
 				break
 			}
-			i.responseCh <- msg[:n]
+			i.responseCh <- &Message{msg: msg[:n], addr: w.LocalAddr().String()}
 		}
 	}()
 	i.Lock()
