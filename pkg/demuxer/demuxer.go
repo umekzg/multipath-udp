@@ -97,6 +97,10 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 			continue
 		}
 		conns := interfaces.Connections()
+		if len(conns) == 0 {
+			fmt.Printf("no connections available\n")
+			continue
+		}
 		switch p.(type) {
 		case *srt.DataPacket:
 			if len(conns) <= 2 {
