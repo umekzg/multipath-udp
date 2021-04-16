@@ -1,6 +1,6 @@
-# multipath-rtp
+# multipath-srt
 
-A tool that ingests RTMP, schedules it over multiple interfaces, and spits it out as an SRT stream.
+This is a tool that sends an SRT stream over various network interfaces and receives them with a configurable jitter buffer. After the jitter buffer, the stream is sent to SRT.
 
 ## Usage
 
