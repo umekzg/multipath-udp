@@ -84,9 +84,12 @@ func (r *ReceiverBuffer) runEventLoop() {
 				r.tail++
 				r.count--
 				if r.count > 0 {
+					start := r.tail
 					for r.get(r.tail) == nil {
-						fmt.Printf("missing packet %d\n", r.tail)
 						r.tail++
+					}
+					if r.tail != start {
+						fmt.Printf("misisng packets %d - %d (%d)\n", start, r.tail, r.tail-start)
 					}
 				}
 			}
