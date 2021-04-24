@@ -14,8 +14,7 @@ type ReceiverBuffer struct {
 	count  int
 	tail   uint32
 
-	bufferDelay          time.Duration
-	retransmissionDelays []time.Duration
+	bufferDelay time.Duration
 
 	EmitCh    chan srt.Packet
 	MissingCh chan *srt.ControlPacket
@@ -28,16 +27,15 @@ type EnqueuedPacket struct {
 	EmitAt time.Time
 }
 
-func NewReceiverBuffer(bufferDelay time.Duration, retransmissionDelays ...time.Duration) *ReceiverBuffer {
+func NewReceiverBuffer(bufferDelay time.Duration) *ReceiverBuffer {
 	buffer := make([]*EnqueuedPacket, math.MaxUint16)
 
 	r := &ReceiverBuffer{
-		buffer:               buffer,
-		bufferDelay:          bufferDelay,
-		retransmissionDelays: retransmissionDelays,
-		EmitCh:               make(chan srt.Packet, math.MaxUint16),
-		MissingCh:            make(chan *srt.ControlPacket, math.MaxUint16),
-		pushCh:               make(chan *srt.DataPacket, math.MaxUint16),
+		buffer:      buffer,
+		bufferDelay: bufferDelay,
+		EmitCh:      make(chan srt.Packet, math.MaxUint16),
+		MissingCh:   make(chan *srt.ControlPacket, math.MaxUint16),
+		pushCh:      make(chan *srt.DataPacket, math.MaxUint16),
 	}
 
 	go r.runEventLoop()
@@ -97,7 +95,6 @@ func (r *ReceiverBuffer) runEventLoop() {
 					}
 				}
 			}
-
 		} else {
 			p, ok := <-r.pushCh
 			if !ok {
@@ -126,5 +123,6 @@ func (r *ReceiverBuffer) Add(p srt.Packet) {
 
 func (r *ReceiverBuffer) Close() {
 	close(r.pushCh)
+	close(r.MissingCh)
 	close(r.EmitCh)
 }

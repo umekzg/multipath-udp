@@ -144,6 +144,7 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 		switch v := p.(type) {
 		case *srt.DataPacket:
 			buf.Add(v)
+			fmt.Printf("sending pkt %d\n", v.SequenceNumber())
 			if len(conns) <= 3 {
 				// write to all interfaces.
 				for _, conn := range conns {
