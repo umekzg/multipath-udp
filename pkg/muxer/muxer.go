@@ -151,11 +151,15 @@ func (m *Muxer) readLoop(listen *net.UDPAddr) {
 	for {
 		msg := make([]byte, 2048)
 
+		start := time.Now()
 		n, senderAddr, err := r.ReadFromUDP(msg)
 		if err != nil {
 			fmt.Printf("error reading %v\n", err)
 			break
 		}
+		end := time.Now()
+
+		fmt.Printf("read delay %d\n", end.Sub(start).Milliseconds())
 
 		senderLock.Lock()
 		senders[senderAddr.String()] = senderAddr
