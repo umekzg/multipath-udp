@@ -67,6 +67,9 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 			}
 			switch v := p.(type) {
 			case *srt.ControlPacket:
+				if v.ControlType() == srt.ControlTypeNak {
+					fmt.Printf("recvd nack\n")
+				}
 				if v.ControlType() == srt.ControlTypeUserDefined && v.Subtype() == srt.SubtypeMultipathAck {
 					rateLock.Lock()
 					fmt.Printf("%v %v\n", msg.addr, v.TypeSpecificInformation())
