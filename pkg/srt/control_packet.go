@@ -79,7 +79,7 @@ func NewNakControlPacket(from, to uint32) *ControlPacket {
 	pkt[0] = 0xFF
 	pkt[1] = 0xFF
 	pkt[2] = 0x00
-	pkt[3] = 0x02
+	pkt[3] = 0x03
 	binary.BigEndian.PutUint32(pkt[16:20], from)
 	binary.BigEndian.PutUint32(pkt[20:24], from)
 	return &ControlPacket{RawPacket: pkt}
