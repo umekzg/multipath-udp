@@ -145,8 +145,8 @@ func (m *Muxer) readLoop(listen *net.UDPAddr) {
 	}()
 
 	// measure bitrate in 2-second blocks.
-	expiration := time.Now().Add(1 * time.Second)
-	counts := make(map[string]int)
+	// expiration := time.Now().Add(1 * time.Second)
+	// counts := make(map[string]int)
 
 	var wg sync.WaitGroup
 	for i := 0; i < 10; i++ {
@@ -171,26 +171,26 @@ func (m *Muxer) readLoop(listen *net.UDPAddr) {
 					senderLock.Unlock()
 				}
 
-				if expiration.Before(time.Now()) {
-					// broadcast statistics downstream.
-					if handshaken {
-						go func(counts map[string]int) {
-							for senderAddr, ct := range counts {
-								fmt.Printf("%v recv ct %v\n", senderAddr, ct)
-								p := srt.NewMultipathAckControlPacket(uint32(ct))
-								senderLock.Lock()
-								if sender, ok := senders[senderAddr]; ok {
-									r.WriteToUDP(p.Marshal(), sender)
-								}
-								senderLock.Unlock()
-							}
-						}(counts)
-					}
-					counts = make(map[string]int)
-					expiration = time.Now().Add(1 * time.Second)
-				}
+				// if expiration.Before(time.Now()) {
+				// 	// broadcast statistics downstream.
+				// 	if handshaken {
+				// 		go func(counts map[string]int) {
+				// 			for senderAddr, ct := range counts {
+				// 				fmt.Printf("%v recv ct %v\n", senderAddr, ct)
+				// 				p := srt.NewMultipathAckControlPacket(uint32(ct))
+				// 				senderLock.Lock()
+				// 				if sender, ok := senders[senderAddr]; ok {
+				// 					r.WriteToUDP(p.Marshal(), sender)
+				// 				}
+				// 				senderLock.Unlock()
+				// 			}
+				// 		}(counts)
+				// 	}
+				// 	counts = make(map[string]int)
+				// 	expiration = time.Now().Add(1 * time.Second)
+				// }
 
-				counts[senderAddr.String()] += 1
+				// counts[senderAddr.String()] += 1
 
 				p, err := srt.Unmarshal(msg[:n])
 				if err != nil {
