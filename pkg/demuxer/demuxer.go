@@ -1,12 +1,14 @@
 package demuxer
 
 import (
+	"encoding/binary"
 	"fmt"
 	"math"
 	"math/rand"
 	"net"
 	"sync"
 
+	"github.com/muxfd/multipath-udp/pkg/buffer"
 	"github.com/muxfd/multipath-udp/pkg/interfaces"
 	"github.com/muxfd/multipath-udp/pkg/srt"
 	"gonum.org/v1/gonum/stat/sampleuv"
@@ -53,6 +55,8 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 	rates := make(map[string]uint32)
 	var rateLock sync.Mutex
 
+	buf := buffer.NewSenderBuffer()
+
 	go func() {
 		for {
 			msg, ok := <-d.responseCh
@@ -67,8 +71,23 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 			}
 			switch v := p.(type) {
 			case *srt.ControlPacket:
-				if v.ControlType() == srt.ControlTypeNak {
-					fmt.Printf("recvd nack\n")
+				if v.ControlType() == srt.ControlTypeUserDefined && v.Subtype() == srt.SubtypeMultipathNak {
+					from := binary.BigEndian.Uint32(v.RawPacket[16:20])
+					to := binary.BigEndian.Uint32(v.RawPacket[20:24])
+					conns := interfaces.Connections()
+					if len(conns) == 0 {
+						fmt.Printf("no connections available\n")
+						continue
+					}
+					for i := from; i < to; i++ {
+						pkt := buf.Get(i)
+						// write to all interfaces.
+						for _, conn := range conns {
+							if _, err := conn.Write(pkt.RawPacket); err != nil {
+								fmt.Printf("error writing to socket %v: %v\n", conn, err)
+							}
+						}
+					}
 				}
 				if v.ControlType() == srt.ControlTypeUserDefined && v.Subtype() == srt.SubtypeMultipathAck {
 					rateLock.Lock()
@@ -121,8 +140,9 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 			fmt.Printf("no connections available\n")
 			continue
 		}
-		switch p.(type) {
+		switch v := p.(type) {
 		case *srt.DataPacket:
+			buf.Add(v)
 			if len(conns) <= 3 {
 				// write to all interfaces.
 				for _, conn := range conns {

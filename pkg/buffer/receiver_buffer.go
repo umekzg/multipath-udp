@@ -17,7 +17,8 @@ type ReceiverBuffer struct {
 	bufferDelay          time.Duration
 	retransmissionDelays []time.Duration
 
-	EmitCh chan srt.Packet
+	EmitCh    chan srt.Packet
+	MissingCh chan *srt.ControlPacket
 
 	pushCh chan *srt.DataPacket
 }
@@ -35,6 +36,7 @@ func NewReceiverBuffer(bufferDelay time.Duration, retransmissionDelays ...time.D
 		bufferDelay:          bufferDelay,
 		retransmissionDelays: retransmissionDelays,
 		EmitCh:               make(chan srt.Packet, math.MaxUint16),
+		MissingCh:            make(chan *srt.ControlPacket, math.MaxUint16),
 		pushCh:               make(chan *srt.DataPacket, math.MaxUint16),
 	}
 
@@ -90,6 +92,8 @@ func (r *ReceiverBuffer) runEventLoop() {
 					}
 					if r.tail != start {
 						fmt.Printf("misisng packets %d - %d (%d)\n", start, r.tail, r.tail-start)
+						// write a nak.
+						r.MissingCh <- srt.NewNakControlPacket(start, r.tail)
 					}
 				}
 			}

@@ -6,29 +6,29 @@ import (
 )
 
 type DataPacket struct {
-	rawPacket []byte
+	RawPacket []byte
 }
 
 func (p *DataPacket) Unmarshal(rawPacket []byte) error {
 	if len(rawPacket) < 16 {
 		return errors.New("packet too short")
 	}
-	p.rawPacket = rawPacket
+	p.RawPacket = rawPacket
 	return nil
 }
 
 func (p DataPacket) Marshal() []byte {
-	return p.rawPacket
+	return p.RawPacket
 }
 
 func (p DataPacket) SequenceNumber() uint32 {
-	return binary.BigEndian.Uint32(p.rawPacket[:4]) & 0x7FFFFFFF
+	return binary.BigEndian.Uint32(p.RawPacket[:4]) & 0x7FFFFFFF
 }
 
 func (p DataPacket) Timestamp() uint32 {
-	return binary.BigEndian.Uint32(p.rawPacket[8:12])
+	return binary.BigEndian.Uint32(p.RawPacket[8:12])
 }
 
 func (p DataPacket) DestinationSocketId() uint32 {
-	return binary.BigEndian.Uint32(p.rawPacket[12:16])
+	return binary.BigEndian.Uint32(p.RawPacket[12:16])
 }

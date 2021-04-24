@@ -1,36 +1,24 @@
 package buffer
 
 import (
-	"container/ring"
-	"errors"
+	"math"
+
+	"github.com/muxfd/multipath-udp/pkg/srt"
 )
 
 // SenderBuffer represents a linear buffer that discards based on the sequence number.
 type SenderBuffer struct {
-	ring        *ring.Ring
-	size        int
-	activeIndex int
+	buf []*srt.DataPacket
 }
 
-func NewSenderBuffer(n int) *SenderBuffer {
-	return &SenderBuffer{ring: ring.New(n), size: n}
+func NewSenderBuffer() *SenderBuffer {
+	return &SenderBuffer{buf: make([]*srt.DataPacket, math.MaxUint16)}
 }
 
-func (b *SenderBuffer) Add(data interface{}) {
-	b.ring.Value = data
-	b.ring = b.ring.Next()
-	b.activeIndex++
+func (b *SenderBuffer) Add(pkt *srt.DataPacket) {
+	b.buf[int(pkt.SequenceNumber())%len(b.buf)] = pkt
 }
 
-func (b *SenderBuffer) Get(index int) (interface{}, error) {
-	if index >= b.activeIndex {
-		return nil, errors.New("index out of range: too large")
-	} else if index < 0 {
-		return nil, errors.New("index out of range: negative")
-	}
-	delta := index - b.activeIndex
-	if delta < -b.size {
-		return nil, errors.New("index out of range: too small, discarded")
-	}
-	return b.ring.Move(delta).Value, nil
+func (b *SenderBuffer) Get(index uint32) *srt.DataPacket {
+	return b.buf[int(index)%len(b.buf)]
 }
