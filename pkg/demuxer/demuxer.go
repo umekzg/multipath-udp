@@ -120,7 +120,7 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 		}
 		switch p.(type) {
 		case *srt.DataPacket:
-			if len(conns) <= 1 {
+			if len(conns) <= 3 {
 				// write to all interfaces.
 				for _, conn := range conns {
 					if _, err := conn.Write(msg[:n]); err != nil {
