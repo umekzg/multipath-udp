@@ -148,60 +148,68 @@ func (m *Muxer) readLoop(listen *net.UDPAddr) {
 	expiration := time.Now().Add(1 * time.Second)
 	counts := make(map[string]int)
 
-	for {
-		msg := make([]byte, 2048)
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			for {
+				msg := make([]byte, 2048)
 
-		start := time.Now()
-		n, senderAddr, err := r.ReadFromUDP(msg)
-		if err != nil {
-			fmt.Printf("error reading %v\n", err)
-			break
-		}
-		end := time.Now()
+				start := time.Now()
+				n, senderAddr, err := r.ReadFromUDP(msg)
+				if err != nil {
+					fmt.Printf("error reading %v\n", err)
+					break
+				}
+				end := time.Now()
 
-		fmt.Printf("read delay %d\n", end.Sub(start).Milliseconds())
+				fmt.Printf("read delay %d\n", end.Sub(start).Milliseconds())
 
-		if _, ok := senders[senderAddr.String()]; !ok {
-			senderLock.Lock()
-			senders[senderAddr.String()] = senderAddr
-			senderLock.Unlock()
-		}
+				if _, ok := senders[senderAddr.String()]; !ok {
+					senderLock.Lock()
+					senders[senderAddr.String()] = senderAddr
+					senderLock.Unlock()
+				}
 
-		if expiration.Before(time.Now()) {
-			// broadcast statistics downstream.
-			if handshaken {
-				go func(counts map[string]int) {
-					for senderAddr, ct := range counts {
-						fmt.Printf("%v recv ct %v\n", senderAddr, ct)
-						p := srt.NewMultipathAckControlPacket(uint32(ct))
-						senderLock.Lock()
-						if sender, ok := senders[senderAddr]; ok {
-							r.WriteToUDP(p.Marshal(), sender)
-						}
-						senderLock.Unlock()
+				if expiration.Before(time.Now()) {
+					// broadcast statistics downstream.
+					if handshaken {
+						go func(counts map[string]int) {
+							for senderAddr, ct := range counts {
+								fmt.Printf("%v recv ct %v\n", senderAddr, ct)
+								p := srt.NewMultipathAckControlPacket(uint32(ct))
+								senderLock.Lock()
+								if sender, ok := senders[senderAddr]; ok {
+									r.WriteToUDP(p.Marshal(), sender)
+								}
+								senderLock.Unlock()
+							}
+						}(counts)
 					}
-				}(counts)
+					counts = make(map[string]int)
+					expiration = time.Now().Add(1 * time.Second)
+				}
+
+				counts[senderAddr.String()] += 1
+
+				p, err := srt.Unmarshal(msg[:n])
+				if err != nil {
+					fmt.Printf("error unmarshalling rtp packet %v\n", err)
+					continue
+				}
+				switch v := p.(type) {
+				case *srt.ControlPacket:
+					if v.ControlType() == srt.ControlTypeHandshake {
+						handshaken = false
+					}
+				}
+
+				m.buf.Add(p)
 			}
-			counts = make(map[string]int)
-			expiration = time.Now().Add(1 * time.Second)
-		}
-
-		counts[senderAddr.String()] += 1
-
-		p, err := srt.Unmarshal(msg[:n])
-		if err != nil {
-			fmt.Printf("error unmarshalling rtp packet %v\n", err)
-			continue
-		}
-		switch v := p.(type) {
-		case *srt.ControlPacket:
-			if v.ControlType() == srt.ControlTypeHandshake {
-				handshaken = false
-			}
-		}
-
-		m.buf.Add(p)
+			wg.Done()
+		}()
 	}
+	wg.Wait()
 }
 
 // Close closes all receivers and sinks associated with the muxer, freeing up resources.
