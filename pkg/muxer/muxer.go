@@ -82,36 +82,53 @@ func (m *Muxer) readLoop(listen *net.UDPAddr) {
 
 	go func() {
 		for {
-			msg, ok := <-m.responseCh
-			if !ok {
-				fmt.Printf("response ch closed\n")
-				break
-			}
+			select {
+			case msg, ok := <-m.responseCh:
+				if !ok {
+					fmt.Printf("response ch closed\n")
+					break
+				}
 
-			// broadcast to all senders since this is a control packet.
-			senderLock.Lock()
-			p, err := srt.Unmarshal(msg)
-			if err != nil {
-				fmt.Printf("not an srt packet: %v\n", err)
-				continue
-			}
-			switch v := p.(type) {
-			case *srt.DataPacket:
-				for _, sender := range senders {
-					if _, err := r.WriteToUDP(msg, sender); err != nil {
-						fmt.Printf("sender %v closed\n", sender)
-						delete(senders, sender.String())
+				// broadcast to all senders since this is a control packet.
+				senderLock.Lock()
+				p, err := srt.Unmarshal(msg)
+				if err != nil {
+					fmt.Printf("not an srt packet: %v\n", err)
+					continue
+				}
+				switch v := p.(type) {
+				case *srt.DataPacket:
+					for _, sender := range senders {
+						if _, err := r.WriteToUDP(msg, sender); err != nil {
+							fmt.Printf("sender %v closed\n", sender)
+							delete(senders, sender.String())
+						}
+					}
+				case *srt.ControlPacket:
+					// pick a random socket.
+					if v.ControlType() == srt.ControlTypeHandshake {
+						handshaken = true
+					}
+					i := rand.Intn(len(senders))
+					for _, sender := range senders {
+						if i == 0 {
+							if _, err := r.WriteToUDP(msg, sender); err != nil {
+								fmt.Printf("sender %v closed\n", sender)
+								delete(senders, sender.String())
+							}
+							break
+						} else {
+							i--
+						}
 					}
 				}
-			case *srt.ControlPacket:
-				// pick a random socket.
-				if v.ControlType() == srt.ControlTypeHandshake {
-					handshaken = true
-				}
+				senderLock.Unlock()
+			case msg := <-m.buf.MissingCh:
+				senderLock.Lock()
 				i := rand.Intn(len(senders))
 				for _, sender := range senders {
 					if i == 0 {
-						if _, err := r.WriteToUDP(msg, sender); err != nil {
+						if _, err := r.WriteToUDP(msg.RawPacket, sender); err != nil {
 							fmt.Printf("sender %v closed\n", sender)
 							delete(senders, sender.String())
 						}
@@ -120,8 +137,9 @@ func (m *Muxer) readLoop(listen *net.UDPAddr) {
 						i--
 					}
 				}
+				senderLock.Unlock()
+
 			}
-			senderLock.Unlock()
 		}
 	}()
 
