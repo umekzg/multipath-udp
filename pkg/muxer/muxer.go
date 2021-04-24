@@ -161,9 +161,11 @@ func (m *Muxer) readLoop(listen *net.UDPAddr) {
 
 		fmt.Printf("read delay %d\n", end.Sub(start).Milliseconds())
 
-		senderLock.Lock()
-		senders[senderAddr.String()] = senderAddr
-		senderLock.Unlock()
+		if _, ok := senders[senderAddr.String()]; !ok {
+			senderLock.Lock()
+			senders[senderAddr.String()] = senderAddr
+			senderLock.Unlock()
+		}
 
 		if expiration.Before(time.Now()) {
 			// broadcast statistics downstream.
