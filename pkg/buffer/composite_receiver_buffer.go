@@ -55,6 +55,16 @@ func NewCompositeReceiverBuffer(delays ...time.Duration) *CompositeReceiverBuffe
 		}(r.buffers[i])
 	}
 
+	go func(buf *ReceiverBuffer) {
+		for {
+			p, ok := <-buf.EmitCh
+			if !ok {
+				break
+			}
+			r.EmitCh <- p
+		}
+	}(r.buffers[len(r.buffers)-1])
+
 	return r
 }
 
