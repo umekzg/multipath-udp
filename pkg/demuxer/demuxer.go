@@ -74,6 +74,7 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 				if v.ControlType() == srt.ControlTypeUserDefined && v.Subtype() == srt.SubtypeMultipathNak {
 					from := binary.BigEndian.Uint32(v.RawPacket[16:20])
 					to := binary.BigEndian.Uint32(v.RawPacket[20:24])
+					fmt.Printf("manual nak %d %d\n", from, to)
 					conns := interfaces.Connections()
 					if len(conns) == 0 {
 						fmt.Printf("no connections available\n")
