@@ -183,6 +183,7 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 			}
 		case *srt.ControlPacket:
 			// pick a random connection.
+			fmt.Printf("control pkt\n")
 			i := rand.Intn(len(conns))
 			for _, conn := range conns {
 				if i == 0 {
