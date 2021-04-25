@@ -32,7 +32,6 @@ func (m *Muxer) readLoop(listen, dial *net.UDPAddr) {
 	if err != nil {
 		panic(err)
 	}
-	r.SetReadBuffer(1024 * 1024)
 
 	var sessionsLock sync.RWMutex
 	sessions := make(map[uint32]*Session)
@@ -105,6 +104,7 @@ func (m *Muxer) readLoop(listen, dial *net.UDPAddr) {
 									sessions[z.HandshakeSocketId()] = session
 									sessionsLock.Unlock()
 								}
+								fmt.Printf("recv ctrl pkt\n")
 							}
 							for _, senderAddr := range session.sources {
 								if _, err := r.WriteToUDP(buffer[:n], senderAddr); err != nil {

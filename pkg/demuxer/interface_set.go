@@ -83,7 +83,6 @@ func (i *InterfaceSet) Connections() []*net.UDPConn {
 		conns = append(conns, conn)
 	}
 	i.RUnlock()
-	fmt.Printf("%v\n", conns)
 	return conns
 }
 
