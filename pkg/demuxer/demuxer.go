@@ -92,91 +92,97 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 		fmt.Printf("no connections available\n")
 	}
 
-	for {
-		msg := make([]byte, 2048)
+	var wg sync.WaitGroup
 
-		n, senderAddr, err := r.ReadFromUDP(msg)
-		if err != nil {
-			fmt.Printf("error reading %v\n", err)
-			break
-		}
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			for {
+				msg := make([]byte, 2048)
 
-		go func(buf []byte) {
+				n, senderAddr, err := r.ReadFromUDP(msg)
+				if err != nil {
+					fmt.Printf("error reading %v\n", err)
+					break
+				}
 
-			p, err := srt.Unmarshal(buf)
-			if err != nil {
-				fmt.Printf("error unmarshaling srt packet %v\n", err)
-				return
-			}
-			if p.DestinationSocketId() == 0 {
+				p, err := srt.Unmarshal(msg[:n])
+				if err != nil {
+					fmt.Printf("error unmarshaling srt packet %v\n", err)
+					continue
+				}
+				if p.DestinationSocketId() == 0 {
+					switch v := p.(type) {
+					case *srt.ControlPacket:
+						sourceLock.Lock()
+						sources[v.HandshakeSocketId()] = senderAddr
+						sourceLock.Unlock()
+					}
+				}
+				if err != nil {
+					fmt.Printf("error unmarshalling rtp packet %v\n", err)
+					continue
+				}
 				switch v := p.(type) {
-				case *srt.ControlPacket:
-					sourceLock.Lock()
-					sources[v.HandshakeSocketId()] = senderAddr
-					sourceLock.Unlock()
-				}
-			}
-			if err != nil {
-				fmt.Printf("error unmarshalling rtp packet %v\n", err)
-				return
-			}
-			switch v := p.(type) {
-			case *srt.DataPacket:
-				// buf.Add(v)
-				fmt.Printf("sending pkt %d\n", v.SequenceNumber())
-				if len(conns) <= 3 {
-					// write to all interfaces.
-					for _, conn := range conns {
-						if _, err := conn.Write(msg[:n]); err != nil {
-							fmt.Printf("error writing to socket %v: %v\n", conn, err)
+				case *srt.DataPacket:
+					// buf.Add(v)
+					fmt.Printf("sending pkt %d\n", v.SequenceNumber())
+					if len(conns) <= 3 {
+						// write to all interfaces.
+						for _, conn := range conns {
+							if _, err := conn.Write(msg[:n]); err != nil {
+								fmt.Printf("error writing to socket %v: %v\n", conn, err)
+							}
 						}
-					}
-				} else {
-					// pick two.
-					w := make([]float64, len(conns))
-					rateLock.Lock()
-					for i, c := range conns {
-						if x, ok := rates[c.LocalAddr().String()]; ok {
-							w[i] = math.Log2(math.Max(float64(x), 2))
-						} else {
-							w[i] = 1
-						}
-					}
-					rateLock.Unlock()
-					rng := sampleuv.NewWeighted(w, nil)
-					a, ok := rng.Take()
-					if !ok {
-						fmt.Printf("error sampling weights %v", w)
-					}
-					b, ok := rng.Take()
-					if !ok {
-						fmt.Printf("error sampling weights %v", w)
-					}
-					// fmt.Printf("using %v %v\n", w, rates)
-					if _, err := conns[a].Write(msg[:n]); err != nil {
-						fmt.Printf("error writing to socket %v: %v\n", conns[a], err)
-					}
-					if _, err := conns[b].Write(msg[:n]); err != nil {
-						fmt.Printf("error writing to socket %v: %v\n", conns[(a+1)%len(conns)], err)
-					}
-				}
-			case *srt.ControlPacket:
-				// pick a random connection.
-				fmt.Printf("control pkt\n")
-				i := rand.Intn(len(conns))
-				for _, conn := range conns {
-					if i == 0 {
-						if _, err := conn.Write(msg[:n]); err != nil {
-							fmt.Printf("error writing to socket %v: %v\n", conn, err)
-						}
-						break
 					} else {
-						i--
+						// pick two.
+						w := make([]float64, len(conns))
+						rateLock.Lock()
+						for i, c := range conns {
+							if x, ok := rates[c.LocalAddr().String()]; ok {
+								w[i] = math.Log2(math.Max(float64(x), 2))
+							} else {
+								w[i] = 1
+							}
+						}
+						rateLock.Unlock()
+						rng := sampleuv.NewWeighted(w, nil)
+						a, ok := rng.Take()
+						if !ok {
+							fmt.Printf("error sampling weights %v", w)
+						}
+						b, ok := rng.Take()
+						if !ok {
+							fmt.Printf("error sampling weights %v", w)
+						}
+						// fmt.Printf("using %v %v\n", w, rates)
+						if _, err := conns[a].Write(msg[:n]); err != nil {
+							fmt.Printf("error writing to socket %v: %v\n", conns[a], err)
+						}
+						if _, err := conns[b].Write(msg[:n]); err != nil {
+							fmt.Printf("error writing to socket %v: %v\n", conns[(a+1)%len(conns)], err)
+						}
+					}
+				case *srt.ControlPacket:
+					// pick a random connection.
+					fmt.Printf("control pkt\n")
+					i := rand.Intn(len(conns))
+					for _, conn := range conns {
+						if i == 0 {
+							if _, err := conn.Write(msg[:n]); err != nil {
+								fmt.Printf("error writing to socket %v: %v\n", conn, err)
+							}
+							break
+						} else {
+							i--
+						}
 					}
 				}
 			}
-		}(msg[:n])
+			wg.Done()
+		}()
 	}
+	wg.Wait()
 }
 
 // Close closes all receivers and sinks associated with the muxer, freeing up resources.
