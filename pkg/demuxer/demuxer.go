@@ -37,18 +37,16 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 
 	sessions := make(map[string]*Session)
 
-	respCh := make(chan *Message, 128)
-
 	rr := 0
 
 	for {
-		var buffer [1500]byte
-		n, senderAddr, err := r.ReadFromUDP(buffer[0:])
+		var buf [1500]byte
+		n, senderAddr, err := r.ReadFromUDP(buf[0:])
 		if err != nil {
 			fmt.Printf("read failed %v\n", err)
 			break
 		}
-		p, err := srt.Unmarshal(buffer[:n])
+		p, err := srt.Unmarshal(buf[:n])
 		if err != nil {
 			fmt.Printf("not a valid srt packet\n")
 			continue
@@ -56,6 +54,7 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 		saddr := senderAddr.String()
 		session, found := sessions[saddr]
 		if !found {
+			respCh := make(chan *Message, 128)
 			session = NewSession(dial, respCh)
 			close := d.interfaceBinder.Bind(session.Add, session.Remove, dial)
 			defer close()
@@ -95,19 +94,7 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 								}
 							}
 						} else {
-							if v.ControlType() == srt.ControlTypeHandshake && !session.IsNegotiated() {
-								session.SetNegotiated(true)
-								// go func(dst uint32) {
-								// 	for {
-								// 		time.Sleep(750 * time.Millisecond)
-								// 		if _, err = r.WriteToUDP(srt.NewKeepAlivePacket(dst).Marshal(), senderAddr); err != nil {
-								// 			fmt.Printf("error writing keep alive %v\n", err)
-								// 			break
-								// 		}
-								// 	}
-								// }(v.HandshakeSocketId())
-							}
-							if _, err = r.WriteToUDP(p.Marshal(), senderAddr); err != nil {
+							if n, err := r.WriteToUDP(p.Marshal(), senderAddr); err != nil || n != len(p.Marshal()) {
 								fmt.Printf("error writing response %v\n", err)
 								break
 							}
@@ -127,15 +114,19 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 			session.buffer.Add(v)
 
 			conns := session.Connections()
+			if len(conns) == 0 {
+				fmt.Printf("no connections\n")
+				break
+			}
 			conn := conns[rr%len(conns)]
-			if _, err = conn.Write(buffer[:n]); err != nil {
+			if _, err = conn.Write(buf[:n]); err != nil {
 				fmt.Printf("error writing pkt %v\n", err)
 			}
 		case *srt.ControlPacket:
-			conns := session.Connections()
-			conn := conns[rr%len(conns)]
-			if _, err = conn.Write(buffer[:n]); err != nil {
-				fmt.Printf("error writing pkt %v\n", err)
+			for _, conn := range session.Connections() {
+				if _, err = conn.Write(buf[:n]); err != nil {
+					fmt.Printf("error writing pkt %v\n", err)
+				}
 			}
 		}
 		rr++

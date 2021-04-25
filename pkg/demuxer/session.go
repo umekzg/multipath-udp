@@ -89,18 +89,6 @@ func (s *Session) Connections() []*net.UDPConn {
 	return conns
 }
 
-func (s *Session) IsNegotiated() bool {
-	s.RLock()
-	defer s.RUnlock()
-	return s.negotiated
-}
-
-func (s *Session) SetNegotiated(val bool) {
-	s.Lock()
-	defer s.Unlock()
-	s.negotiated = val
-}
-
 func (s *Session) Close() {
 	for _, conn := range s.connections {
 		conn.Close()

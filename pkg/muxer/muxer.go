@@ -84,25 +84,16 @@ func (m *Muxer) readLoop(listen, dial *net.UDPAddr) {
 						fmt.Printf("failed to create session %v\n", err)
 						break
 					}
-					// go func(dst uint32) {
-					// 	for {
-					// 		time.Sleep(750 * time.Millisecond)
-					// 		if _, err = session.SRTConn.Write(srt.NewKeepAlivePacket(dst).Marshal()); err != nil {
-					// 			fmt.Printf("error writing keep alive %v\n", err)
-					// 			break
-					// 		}
-					// 	}
-					// }(socketId)
 
 					go func() {
-						var buffer [1500]byte
+						var buf [1500]byte
 						for {
-							n, err := session.SRTConn.Read(buffer[0:])
+							n, err := session.SRTConn.Read(buf[0:])
 							if err != nil {
 								fmt.Printf("srt conn closed %v\n", err)
 								break
 							}
-							q, err := srt.Unmarshal(buffer[:n])
+							q, err := srt.Unmarshal(buf[:n])
 							if err != nil {
 								fmt.Printf("not an srt packet")
 								break
@@ -116,7 +107,7 @@ func (m *Muxer) readLoop(listen, dial *net.UDPAddr) {
 								}
 							}
 							for _, senderAddr := range session.sources {
-								if m, err := r.WriteToUDP(buffer[:n], senderAddr); err != nil || n != m {
+								if m, err := r.WriteToUDP(buf[:n], senderAddr); err != nil || n != m {
 									fmt.Printf("error writing response %v\n", err)
 									break
 								}
