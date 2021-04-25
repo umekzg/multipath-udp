@@ -55,7 +55,7 @@ func main() {
 
 	fmt.Printf("listening to %s forwarding to %s\n", inputAddr, outputAddr)
 
-	muxer.NewMuxer().Start(inputAddr, outputAddr)
-
-	select {}
+	for {
+		muxer.NewMuxer().Start(inputAddr, outputAddr)
+	}
 }
