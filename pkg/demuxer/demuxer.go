@@ -3,7 +3,6 @@ package demuxer
 import (
 	"encoding/binary"
 	"fmt"
-	"math/rand"
 	"net"
 
 	"github.com/muxfd/multipath-udp/pkg/interfaces"
@@ -39,6 +38,8 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 	sessions := make(map[string]*InterfaceSet)
 
 	respCh := make(chan *Message, 128)
+
+	rr := 0
 
 	for {
 		var buffer [1500]byte
@@ -95,7 +96,6 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 								}
 							}
 						} else {
-							fmt.Printf("recv ctrl pkt\n")
 							if _, err = r.WriteToUDP(p.Marshal(), senderAddr); err != nil {
 								fmt.Printf("error writing response %v\n", err)
 								break
@@ -115,18 +115,19 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 		case *srt.DataPacket:
 			session.buffer.Add(v)
 
-			for _, conn := range session.Connections() {
-				if _, err = conn.Write(buffer[:n]); err != nil {
-					fmt.Printf("error writing pkt %v\n", err)
-				}
+			conns := session.Connections()
+			conn := conns[rr%len(conns)]
+			if _, err = conn.Write(buffer[:n]); err != nil {
+				fmt.Printf("error writing pkt %v\n", err)
 			}
 		case *srt.ControlPacket:
 			conns := session.Connections()
-			conn := conns[rand.Intn(len(conns))]
+			conn := conns[rr%len(conns)]
 			if _, err = conn.Write(buffer[:n]); err != nil {
 				fmt.Printf("error writing pkt %v\n", err)
 			}
 		}
+		rr++
 	}
 }
 
