@@ -73,8 +73,8 @@ func (m *Muxer) readLoop(listen *net.UDPAddr) {
 	if err != nil {
 		panic(err)
 	}
-	r.SetReadBuffer(1024 * 1024)
-	r.SetWriteBuffer(1024 * 1024)
+	r.SetReadBuffer(1024)
+	r.SetWriteBuffer(1024)
 
 	senders := make(map[string]*net.UDPAddr)
 	handshaken := false
@@ -145,11 +145,11 @@ func (m *Muxer) readLoop(listen *net.UDPAddr) {
 	}()
 
 	// measure bitrate in 2-second blocks.
-	// expiration := time.Now().Add(1 * time.Second)
-	// counts := make(map[string]int)
+	expiration := time.Now().Add(1 * time.Second)
+	counts := make(map[string]int)
 
-	msg := make([]byte, 2048)
 	for {
+		msg := make([]byte, 2048)
 		start := time.Now()
 		n, senderAddr, err := r.ReadFromUDP(msg)
 		if err != nil {
@@ -166,26 +166,26 @@ func (m *Muxer) readLoop(listen *net.UDPAddr) {
 			senderLock.Unlock()
 		}
 
-		// if expiration.Before(time.Now()) {
-		// 	// broadcast statistics downstream.
-		// 	if handshaken {
-		// 		go func(counts map[string]int) {
-		// 			for senderAddr, ct := range counts {
-		// 				fmt.Printf("%v recv ct %v\n", senderAddr, ct)
-		// 				p := srt.NewMultipathAckControlPacket(uint32(ct))
-		// 				senderLock.Lock()
-		// 				if sender, ok := senders[senderAddr]; ok {
-		// 					r.WriteToUDP(p.Marshal(), sender)
-		// 				}
-		// 				senderLock.Unlock()
-		// 			}
-		// 		}(counts)
-		// 	}
-		// 	counts = make(map[string]int)
-		// 	expiration = time.Now().Add(1 * time.Second)
-		// }
+		if expiration.Before(time.Now()) {
+			// broadcast statistics downstream.
+			if handshaken {
+				go func(counts map[string]int) {
+					for senderAddr, ct := range counts {
+						fmt.Printf("%v recv ct %v\n", senderAddr, ct)
+						p := srt.NewMultipathAckControlPacket(uint32(ct))
+						senderLock.Lock()
+						if sender, ok := senders[senderAddr]; ok {
+							r.WriteToUDP(p.Marshal(), sender)
+						}
+						senderLock.Unlock()
+					}
+				}(counts)
+			}
+			counts = make(map[string]int)
+			expiration = time.Now().Add(1 * time.Second)
+		}
 
-		// counts[senderAddr.String()] += 1
+		counts[senderAddr.String()] += 1
 
 		p, err := srt.Unmarshal(msg[:n])
 		if err != nil {
