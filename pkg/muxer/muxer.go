@@ -163,7 +163,7 @@ func (m *Muxer) readLoop(listen *net.UDPAddr) {
 				}
 				end := time.Now()
 
-				fmt.Printf("read delay %d\n", end.Sub(start).Milliseconds())
+				fmt.Printf("read delay %d\n", end.Sub(start).Microseconds())
 
 				if _, ok := senders[senderAddr.String()]; !ok {
 					senderLock.Lock()
