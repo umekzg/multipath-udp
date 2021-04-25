@@ -3,7 +3,6 @@ package demuxer
 import (
 	"fmt"
 	"math"
-	"math/rand"
 	"net"
 	"sync"
 
@@ -162,7 +161,7 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 			case *srt.ControlPacket:
 				// pick a random connection.
 				fmt.Printf("control pkt\n")
-				i := rand.Intn(len(conns))
+				i := 0
 				for _, conn := range conns {
 					if i == 0 {
 						if _, err := conn.Write(msg[:n]); err != nil {
