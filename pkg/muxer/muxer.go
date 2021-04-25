@@ -104,6 +104,7 @@ func (m *Muxer) readLoop(listen, dial *net.UDPAddr) {
 							}
 							q, err := srt.Unmarshal(buffer[:n])
 							if err != nil {
+								fmt.Printf("not an srt packet")
 								break
 							}
 							switch z := q.(type) {
@@ -127,6 +128,7 @@ func (m *Muxer) readLoop(listen, dial *net.UDPAddr) {
 						for {
 							msg, ok := <-session.buffer.EmitCh
 							if !ok {
+								fmt.Printf("emit ch closed")
 								break
 							}
 							if n, err := session.SRTConn.Write(msg.Marshal()); err != nil || n != len(msg.Marshal()) {
@@ -139,6 +141,7 @@ func (m *Muxer) readLoop(listen, dial *net.UDPAddr) {
 						for {
 							msg, ok := <-session.buffer.MissingCh
 							if !ok {
+								fmt.Printf("missing ch closed")
 								break
 							}
 							for _, senderAddr := range session.sources {
