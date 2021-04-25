@@ -91,7 +91,7 @@ func (r *ReceiverBuffer) runEventLoop() {
 					if r.tail != start {
 						fmt.Printf("misisng packets %d - %d (%d)\n", start, r.tail, r.tail-start)
 						// write a nak.
-						// r.MissingCh <- srt.NewNakControlPacket(start, r.tail)
+						r.MissingCh <- srt.NewNakControlPacket(start, r.tail)
 					}
 				}
 			}

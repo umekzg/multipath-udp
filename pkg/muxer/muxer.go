@@ -65,8 +65,7 @@ func (m *Muxer) readLoop(listen, dial *net.UDPAddr) {
 	var sessionsLock sync.RWMutex
 	sessions := make(map[uint32]*Session)
 	// measure bitrate in 2-second blocks.
-	// expiration := time.Now().Add(1 * time.Second)
-	// counts := make(map[string]int)
+	meter := NewMeter(2 * time.Second)
 
 	for {
 		msg := make([]byte, 2048)
@@ -76,24 +75,14 @@ func (m *Muxer) readLoop(listen, dial *net.UDPAddr) {
 			break
 		}
 
-		// if expiration.Before(time.Now()) {
-		// 	// broadcast statistics downstream.
-		// 	go func(counts map[string]int) {
-		// 		for senderAddr, ct := range counts {
-		// 			fmt.Printf("%v recv ct %v\n", senderAddr, ct)
-		// 			p := srt.NewMultipathAckControlPacket(uint32(ct))
-		// 			senderLock.Lock()
-		// 			if sender, ok := senders[senderAddr]; ok {
-		// 				r.WriteToUDP(p.Marshal(), sender)
-		// 			}
-		// 			senderLock.Unlock()
-		// 		}
-		// 	}(counts)
-		// 	counts = make(map[string]int)
-		// 	expiration = time.Now().Add(1 * time.Second)
-		// }
-
-		// counts[senderAddr.String()] += 1
+		if meter.IsExpired() {
+			meter.Expire(func(sender *net.UDPAddr, ct uint32) {
+				p := srt.NewMultipathAckControlPacket(ct)
+				fmt.Printf("sender %v ct %d\n", sender, ct)
+				r.WriteToUDP(p.Marshal(), sender)
+			})
+		}
+		meter.Increment(senderAddr)
 
 		p, err := srt.Unmarshal(msg[:n])
 		if err != nil {
