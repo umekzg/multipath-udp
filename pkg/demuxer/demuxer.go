@@ -3,7 +3,6 @@ package demuxer
 import (
 	"fmt"
 	"net"
-	"runtime"
 	"sync"
 
 	"github.com/muxfd/multipath-udp/pkg/interfaces"
@@ -85,64 +84,57 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 		}
 	}()
 
-	var wg sync.WaitGroup
-	for i := 0; i < runtime.NumCPU(); i++ {
-		wg.Add(1)
-		go func() {
-			msg := make([]byte, 1500)
-			for {
-				n, senderAddr, err := r.ReadFromUDP(msg)
-				if err != nil {
-					fmt.Printf("error reading %v\n", err)
-					break
-				}
+	for {
+		msg := make([]byte, 1500)
 
-				p, err := srt.Unmarshal(msg[:n])
-				if err != nil {
-					fmt.Printf("error unmarshaling srt packet %v\n", err)
-					return
-				}
-				if p.DestinationSocketId() == 0 {
-					switch v := p.(type) {
-					case *srt.ControlPacket:
-						sourceLock.Lock()
-						sources[v.HandshakeSocketId()] = senderAddr
-						sourceLock.Unlock()
-					}
-				}
-				if err != nil {
-					fmt.Printf("error unmarshalling rtp packet %v\n", err)
-					return
-				}
+		n, senderAddr, err := r.ReadFromUDP(msg)
+		if err != nil {
+			fmt.Printf("error reading %v\n", err)
+			break
+		}
 
-				conns := interfaces.Connections()
-				if len(conns) == 0 {
-					fmt.Printf("no connections available\n")
-					return
-				}
+		p, err := srt.Unmarshal(msg[:n])
+		if err != nil {
+			fmt.Printf("error unmarshaling srt packet %v\n", err)
+			return
+		}
+		if p.DestinationSocketId() == 0 {
+			switch v := p.(type) {
+			case *srt.ControlPacket:
+				sourceLock.Lock()
+				sources[v.HandshakeSocketId()] = senderAddr
+				sourceLock.Unlock()
+			}
+		}
+		if err != nil {
+			fmt.Printf("error unmarshalling rtp packet %v\n", err)
+			return
+		}
 
-				switch v := p.(type) {
-				case *srt.DataPacket:
-					fmt.Printf("sending pkt %d\n", v.SequenceNumber())
-					// write to all interfaces.
-					for _, conn := range conns {
-						if _, err := conn.Write(msg[:n]); err != nil {
-							fmt.Printf("error writing to socket %v: %v\n", conn, err)
-						}
-					}
-				case *srt.ControlPacket:
-					// pick a random connection.
-					fmt.Printf("control pkt\n")
-					conn := conns[0]
-					if _, err := conn.Write(msg[:n]); err != nil {
-						fmt.Printf("error writing to socket %v: %v\n", conn, err)
-					}
+		conns := interfaces.Connections()
+		if len(conns) == 0 {
+			fmt.Printf("no connections available\n")
+			return
+		}
+
+		switch v := p.(type) {
+		case *srt.DataPacket:
+			fmt.Printf("sending pkt %d\n", v.SequenceNumber())
+			// write to all interfaces.
+			for _, conn := range conns {
+				if _, err := conn.Write(msg[:n]); err != nil {
+					fmt.Printf("error writing to socket %v: %v\n", conn, err)
 				}
 			}
-			wg.Done()
-		}()
+		case *srt.ControlPacket:
+			// pick a random connection.
+			fmt.Printf("control pkt\n")
+			conn := conns[0]
+			if _, err := conn.Write(msg[:n]); err != nil {
+				fmt.Printf("error writing to socket %v: %v\n", conn, err)
+			}
+		}
 	}
-	wg.Wait()
 }
 
 // Close closes all receivers and sinks associated with the muxer, freeing up resources.
