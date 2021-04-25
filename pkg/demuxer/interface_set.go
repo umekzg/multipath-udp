@@ -8,7 +8,7 @@ import (
 )
 
 type Message struct {
-	addr string
+	addr *net.UDPAddr
 	msg  []byte
 }
 
@@ -46,7 +46,7 @@ func (i *InterfaceSet) Add(addr *net.UDPAddr) error {
 			if err != nil {
 				break
 			}
-			i.responseCh <- &Message{msg: msg[:n], addr: w.LocalAddr().String()}
+			i.responseCh <- &Message{msg: msg[:n], addr: w.LocalAddr().(*net.UDPAddr)}
 		}
 	}()
 	i.Lock()
@@ -69,12 +69,18 @@ func (i *InterfaceSet) Remove(addr *net.UDPAddr) error {
 	return nil
 }
 
-func (s *InterfaceSet) Connections() []*net.UDPConn {
-	s.RLock()
-	var conns []*net.UDPConn
-	for _, conn := range s.connections {
+func (i *InterfaceSet) Connections() []*net.UDPConn {
+	i.RLock()
+	conns := make([]*net.UDPConn, 0, len(i.connections))
+	for _, conn := range i.connections {
 		conns = append(conns, conn)
 	}
-	s.RUnlock()
+	i.RUnlock()
 	return conns
+}
+
+func (i *InterfaceSet) Close() {
+	for _, conn := range i.connections {
+		conn.Close()
+	}
 }

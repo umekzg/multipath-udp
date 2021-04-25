@@ -8,10 +8,10 @@ import (
 )
 
 type CompositeReceiverBuffer struct {
-	EmitCh    chan srt.Packet
+	EmitCh    chan *srt.DataPacket
 	MissingCh chan *srt.ControlPacket
 
-	pushCh chan srt.Packet
+	pushCh chan *srt.DataPacket
 
 	buffers []*ReceiverBuffer
 }
@@ -22,9 +22,9 @@ func NewCompositeReceiverBuffer(delays ...time.Duration) *CompositeReceiverBuffe
 	}
 
 	r := &CompositeReceiverBuffer{
-		EmitCh:    make(chan srt.Packet, math.MaxUint16),
+		EmitCh:    make(chan *srt.DataPacket, math.MaxUint16),
 		MissingCh: make(chan *srt.ControlPacket, math.MaxUint16),
-		pushCh:    make(chan srt.Packet, math.MaxUint16),
+		pushCh:    make(chan *srt.DataPacket, math.MaxUint16),
 		buffers:   make([]*ReceiverBuffer, len(delays)),
 	}
 
@@ -34,7 +34,7 @@ func NewCompositeReceiverBuffer(delays ...time.Duration) *CompositeReceiverBuffe
 		if i > 0 {
 			source = r.buffers[i-1].EmitCh
 		}
-		go func(buf *ReceiverBuffer, source chan srt.Packet) {
+		go func(buf *ReceiverBuffer, source chan *srt.DataPacket) {
 			for {
 				p, ok := <-source
 				if !ok {
@@ -68,7 +68,7 @@ func NewCompositeReceiverBuffer(delays ...time.Duration) *CompositeReceiverBuffe
 	return r
 }
 
-func (r *CompositeReceiverBuffer) Add(p srt.Packet) {
+func (r *CompositeReceiverBuffer) Add(p *srt.DataPacket) {
 	r.pushCh <- p
 }
 

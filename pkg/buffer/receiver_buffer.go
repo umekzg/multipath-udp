@@ -16,7 +16,7 @@ type ReceiverBuffer struct {
 
 	bufferDelay time.Duration
 
-	EmitCh    chan srt.Packet
+	EmitCh    chan *srt.DataPacket
 	MissingCh chan *srt.ControlPacket
 
 	pushCh chan *srt.DataPacket
@@ -33,7 +33,7 @@ func NewReceiverBuffer(bufferDelay time.Duration) *ReceiverBuffer {
 	r := &ReceiverBuffer{
 		buffer:      buffer,
 		bufferDelay: bufferDelay,
-		EmitCh:      make(chan srt.Packet, math.MaxUint16),
+		EmitCh:      make(chan *srt.DataPacket, math.MaxUint16),
 		MissingCh:   make(chan *srt.ControlPacket, math.MaxUint16),
 		pushCh:      make(chan *srt.DataPacket, math.MaxUint16),
 	}
@@ -112,13 +112,8 @@ func (r *ReceiverBuffer) runEventLoop() {
 	}
 }
 
-func (r *ReceiverBuffer) Add(p srt.Packet) {
-	switch v := p.(type) {
-	case *srt.DataPacket:
-		r.pushCh <- v
-	case *srt.ControlPacket:
-		r.EmitCh <- v
-	}
+func (r *ReceiverBuffer) Add(p *srt.DataPacket) {
+	r.pushCh <- p
 }
 
 func (r *ReceiverBuffer) Close() {
