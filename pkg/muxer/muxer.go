@@ -84,15 +84,15 @@ func (m *Muxer) readLoop(listen, dial *net.UDPAddr) {
 						fmt.Printf("failed to create session %v\n", err)
 						break
 					}
-					go func(dst uint32) {
-						for {
-							time.Sleep(750 * time.Millisecond)
-							if _, err = session.SRTConn.Write(srt.NewKeepAlivePacket(dst).Marshal()); err != nil {
-								fmt.Printf("error writing keep alive %v\n", err)
-								break
-							}
-						}
-					}(socketId)
+					// go func(dst uint32) {
+					// 	for {
+					// 		time.Sleep(750 * time.Millisecond)
+					// 		if _, err = session.SRTConn.Write(srt.NewKeepAlivePacket(dst).Marshal()); err != nil {
+					// 			fmt.Printf("error writing keep alive %v\n", err)
+					// 			break
+					// 		}
+					// 	}
+					// }(socketId)
 
 					go func() {
 						var buffer [1500]byte

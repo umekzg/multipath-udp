@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
-	"time"
 
 	"github.com/muxfd/multipath-udp/pkg/interfaces"
 	"github.com/muxfd/multipath-udp/pkg/srt"
@@ -96,15 +95,15 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 						} else {
 							if v.ControlType() == srt.ControlTypeHandshake && !session.IsNegotiated() {
 								session.SetNegotiated(true)
-								go func(dst uint32) {
-									for {
-										time.Sleep(750 * time.Millisecond)
-										if _, err = r.WriteToUDP(srt.NewKeepAlivePacket(dst).Marshal(), senderAddr); err != nil {
-											fmt.Printf("error writing keep alive %v\n", err)
-											break
-										}
-									}
-								}(v.HandshakeSocketId())
+								// go func(dst uint32) {
+								// 	for {
+								// 		time.Sleep(750 * time.Millisecond)
+								// 		if _, err = r.WriteToUDP(srt.NewKeepAlivePacket(dst).Marshal(), senderAddr); err != nil {
+								// 			fmt.Printf("error writing keep alive %v\n", err)
+								// 			break
+								// 		}
+								// 	}
+								// }(v.HandshakeSocketId())
 							}
 							if _, err = r.WriteToUDP(p.Marshal(), senderAddr); err != nil {
 								fmt.Printf("error writing response %v\n", err)
