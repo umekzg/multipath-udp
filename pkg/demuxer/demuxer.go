@@ -84,9 +84,8 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 		}
 	}()
 
+	msg := make([]byte, 1500)
 	for {
-		msg := make([]byte, 1500)
-
 		n, senderAddr, err := r.ReadFromUDP(msg)
 		if err != nil {
 			fmt.Printf("error reading %v\n", err)
