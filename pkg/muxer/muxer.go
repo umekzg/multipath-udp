@@ -104,7 +104,6 @@ func (m *Muxer) readLoop(listen, dial *net.UDPAddr) {
 									sessions[z.HandshakeSocketId()] = session
 									sessionsLock.Unlock()
 								}
-								fmt.Printf("recv ctrl pkt\n")
 							}
 							for _, senderAddr := range session.sources {
 								if _, err := r.WriteToUDP(buffer[:n], senderAddr); err != nil {

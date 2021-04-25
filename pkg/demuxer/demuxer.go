@@ -95,9 +95,7 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 								}
 							}
 						} else {
-							if v.ControlType() == srt.ControlTypeHandshake {
-								fmt.Printf("handshake resp v%d %d %d %d\n", binary.BigEndian.Uint32(v.RawPacket[16:20]), v.DestinationSocketId(), v.HandshakeSocketId(), len(v.RawPacket))
-							}
+							fmt.Printf("recv ctrl pkt\n")
 							if _, err = r.WriteToUDP(p.Marshal(), senderAddr); err != nil {
 								fmt.Printf("error writing response %v\n", err)
 								break
@@ -123,9 +121,6 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 				}
 			}
 		case *srt.ControlPacket:
-			if v.ControlType() == srt.ControlTypeHandshake {
-				fmt.Printf("handshake v%d %d %d %d\n", binary.BigEndian.Uint32(v.RawPacket[16:20]), v.DestinationSocketId(), v.HandshakeSocketId(), len(v.RawPacket))
-			}
 			conns := session.Connections()
 			conn := conns[rand.Intn(len(conns))]
 			if _, err = conn.Write(buffer[:n]); err != nil {
