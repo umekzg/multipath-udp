@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"runtime"
 
 	"github.com/muxfd/multipath-udp/pkg/demuxer"
 )
@@ -39,6 +40,8 @@ func main() {
 		showHelp()
 		os.Exit(-1)
 	}
+
+	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	inputAddr, err := net.ResolveUDPAddr("udp", input)
 	if err != nil {
