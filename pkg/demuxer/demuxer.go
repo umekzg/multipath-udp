@@ -2,13 +2,11 @@ package demuxer
 
 import (
 	"fmt"
-	"math"
 	"net"
 	"sync"
 
 	"github.com/muxfd/multipath-udp/pkg/interfaces"
 	"github.com/muxfd/multipath-udp/pkg/srt"
-	"gonum.org/v1/gonum/stat/sampleuv"
 )
 
 // Demuxer represents a UDP stream demuxer that demuxes a source over multiple senders.
@@ -86,11 +84,6 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 		}
 	}()
 
-	conns := interfaces.Connections()
-	if len(conns) == 0 {
-		fmt.Printf("no connections available\n")
-	}
-
 	for {
 		msg := make([]byte, 1500)
 
@@ -100,80 +93,47 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 			break
 		}
 
-		go func(buf []byte) {
-			p, err := srt.Unmarshal(buf)
-			if err != nil {
-				fmt.Printf("error unmarshaling srt packet %v\n", err)
-				return
-			}
-			if p.DestinationSocketId() == 0 {
-				switch v := p.(type) {
-				case *srt.ControlPacket:
-					sourceLock.Lock()
-					sources[v.HandshakeSocketId()] = senderAddr
-					sourceLock.Unlock()
-				}
-			}
-			if err != nil {
-				fmt.Printf("error unmarshalling rtp packet %v\n", err)
-				return
-			}
+		p, err := srt.Unmarshal(msg[:n])
+		if err != nil {
+			fmt.Printf("error unmarshaling srt packet %v\n", err)
+			return
+		}
+		if p.DestinationSocketId() == 0 {
 			switch v := p.(type) {
-			case *srt.DataPacket:
-				// buf.Add(v)
-				fmt.Printf("sending pkt %d\n", v.SequenceNumber())
-				if len(conns) <= 3 {
-					// write to all interfaces.
-					for _, conn := range conns {
-						if _, err := conn.Write(msg[:n]); err != nil {
-							fmt.Printf("error writing to socket %v: %v\n", conn, err)
-						}
-					}
-				} else {
-					// pick two.
-					w := make([]float64, len(conns))
-					rateLock.Lock()
-					for i, c := range conns {
-						if x, ok := rates[c.LocalAddr().String()]; ok {
-							w[i] = math.Log2(math.Max(float64(x), 2))
-						} else {
-							w[i] = 1
-						}
-					}
-					rateLock.Unlock()
-					rng := sampleuv.NewWeighted(w, nil)
-					a, ok := rng.Take()
-					if !ok {
-						fmt.Printf("error sampling weights %v", w)
-					}
-					b, ok := rng.Take()
-					if !ok {
-						fmt.Printf("error sampling weights %v", w)
-					}
-					// fmt.Printf("using %v %v\n", w, rates)
-					if _, err := conns[a].Write(msg[:n]); err != nil {
-						fmt.Printf("error writing to socket %v: %v\n", conns[a], err)
-					}
-					if _, err := conns[b].Write(msg[:n]); err != nil {
-						fmt.Printf("error writing to socket %v: %v\n", conns[(a+1)%len(conns)], err)
-					}
-				}
 			case *srt.ControlPacket:
-				// pick a random connection.
-				fmt.Printf("control pkt\n")
-				i := 0
-				for _, conn := range conns {
-					if i == 0 {
-						if _, err := conn.Write(msg[:n]); err != nil {
-							fmt.Printf("error writing to socket %v: %v\n", conn, err)
-						}
-						break
-					} else {
-						i--
-					}
+				sourceLock.Lock()
+				sources[v.HandshakeSocketId()] = senderAddr
+				sourceLock.Unlock()
+			}
+		}
+		if err != nil {
+			fmt.Printf("error unmarshalling rtp packet %v\n", err)
+			return
+		}
+
+		conns := interfaces.Connections()
+		if len(conns) == 0 {
+			fmt.Printf("no connections available\n")
+			return
+		}
+
+		switch v := p.(type) {
+		case *srt.DataPacket:
+			fmt.Printf("sending pkt %d\n", v.SequenceNumber())
+			// write to all interfaces.
+			for _, conn := range conns {
+				if _, err := conn.Write(msg[:n]); err != nil {
+					fmt.Printf("error writing to socket %v: %v\n", conn, err)
 				}
 			}
-		}(msg[:n])
+		case *srt.ControlPacket:
+			// pick a random connection.
+			fmt.Printf("control pkt\n")
+			conn := conns[0]
+			if _, err := conn.Write(msg[:n]); err != nil {
+				fmt.Printf("error writing to socket %v: %v\n", conn, err)
+			}
+		}
 	}
 }
 
