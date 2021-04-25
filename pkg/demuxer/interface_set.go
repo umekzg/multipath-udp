@@ -65,6 +65,7 @@ func (i *InterfaceSet) Add(addr *net.UDPAddr) error {
 func (i *InterfaceSet) Remove(addr *net.UDPAddr) error {
 	fmt.Printf("removing interface %v\n", addr)
 	i.Lock()
+	defer i.Unlock()
 	key := getUDPAddrKey(addr)
 	if conn, ok := i.connections[key]; ok {
 		if err := conn.Close(); err != nil {
@@ -72,7 +73,6 @@ func (i *InterfaceSet) Remove(addr *net.UDPAddr) error {
 		}
 	}
 	delete(i.connections, key)
-	i.Unlock()
 	return nil
 }
 
@@ -83,6 +83,7 @@ func (i *InterfaceSet) Connections() []*net.UDPConn {
 		conns = append(conns, conn)
 	}
 	i.RUnlock()
+	fmt.Printf("%v\n", conns)
 	return conns
 }
 
