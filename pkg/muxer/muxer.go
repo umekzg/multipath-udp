@@ -12,14 +12,14 @@ import (
 )
 
 type Muxer struct {
-	buf *buffer.CompositeReceiverBuffer
+	buf *buffer.ReceiverBuffer
 
 	responseCh chan []byte
 }
 
 // NewMuxer creates a new uniplex listener muxer
 func NewMuxer(options ...func(*Muxer)) *Muxer {
-	buf := buffer.NewCompositeReceiverBuffer(500*time.Millisecond, 500*time.Millisecond)
+	buf := buffer.NewReceiverBuffer(500 * time.Millisecond)
 	m := &Muxer{buf: buf, responseCh: make(chan []byte, 128)}
 
 	for _, option := range options {
