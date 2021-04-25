@@ -45,6 +45,7 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 		var buffer [1500]byte
 		n, senderAddr, err := r.ReadFromUDP(buffer[0:])
 		if err != nil {
+			fmt.Printf("read failed %v\n", err)
 			break
 		}
 		p, err := srt.Unmarshal(buffer[:n])
@@ -66,6 +67,7 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 				for {
 					resp, ok := <-respCh
 					if !ok {
+						fmt.Printf("response ch closed\n")
 						break
 					}
 					p, err := srt.Unmarshal(resp.msg)
