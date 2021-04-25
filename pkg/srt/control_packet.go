@@ -74,13 +74,13 @@ func (p ControlPacket) HandshakeSocketId() uint32 {
 	return binary.BigEndian.Uint32(p.RawPacket[40:44])
 }
 
-func NewNakControlPacket(from, to uint32) *ControlPacket {
+func NewMultipathNackControlPacket(from, to uint32) *ControlPacket {
 	pkt := make([]byte, 24)
 	pkt[0] = 0xFF
 	pkt[1] = 0xFF
 	pkt[2] = 0x00
 	pkt[3] = 0x03
 	binary.BigEndian.PutUint32(pkt[16:20], from)
-	binary.BigEndian.PutUint32(pkt[20:24], from)
+	binary.BigEndian.PutUint32(pkt[20:24], to)
 	return &ControlPacket{RawPacket: pkt}
 }

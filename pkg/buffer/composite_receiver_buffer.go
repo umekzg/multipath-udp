@@ -28,8 +28,10 @@ func NewCompositeReceiverBuffer(delays ...time.Duration) *CompositeReceiverBuffe
 		buffers:   make([]*ReceiverBuffer, len(delays)),
 	}
 
+	cumulative := delays[0]
 	for i, delay := range delays {
-		r.buffers[i] = NewReceiverBuffer(delay)
+		r.buffers[i] = NewReceiverBuffer(len(delays)-i-1, cumulative)
+		cumulative += delay
 		source := r.pushCh
 		if i > 0 {
 			source = r.buffers[i-1].EmitCh

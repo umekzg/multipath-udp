@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net"
 	"sync"
+
+	"github.com/muxfd/multipath-udp/pkg/buffer"
 )
 
 type Message struct {
@@ -16,11 +18,16 @@ type InterfaceSet struct {
 	sync.RWMutex
 	raddr       *net.UDPAddr
 	connections map[string]*net.UDPConn
+	buffer      *buffer.SenderBuffer
 	responseCh  chan *Message
 }
 
 func NewInterfaceSet(raddr *net.UDPAddr, responseCh chan *Message) *InterfaceSet {
-	return &InterfaceSet{connections: make(map[string]*net.UDPConn), raddr: raddr, responseCh: responseCh}
+	return &InterfaceSet{
+		connections: make(map[string]*net.UDPConn),
+		raddr:       raddr,
+		responseCh:  responseCh,
+		buffer:      buffer.NewSenderBuffer()}
 }
 
 func getUDPAddrKey(addr *net.UDPAddr) string {
@@ -41,8 +48,8 @@ func (i *InterfaceSet) Add(addr *net.UDPAddr) error {
 	w := c.(*net.UDPConn)
 	go func() {
 		for {
-			msg := make([]byte, 2048)
-			n, err := w.Read(msg)
+			var msg [1500]byte
+			n, err := w.Read(msg[0:])
 			if err != nil {
 				break
 			}

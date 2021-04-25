@@ -32,7 +32,6 @@ func (m *Meter) IsExpired() bool {
 
 func (m *Meter) Expire(sink func(*net.UDPAddr, uint32)) {
 	for senderAddr, ct := range m.counts {
-		fmt.Printf("%v recv ct %v\n", senderAddr, ct)
 		sender, ok := m.senders[senderAddr]
 		if !ok {
 			fmt.Printf("lmao wtf\n")

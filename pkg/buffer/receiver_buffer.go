@@ -10,6 +10,7 @@ import (
 
 // ReceiverBuffer represents a linear buffer that discards based on the sequence number.
 type ReceiverBuffer struct {
+	index  int
 	buffer []*EnqueuedPacket
 	count  int
 	tail   uint32
@@ -27,10 +28,11 @@ type EnqueuedPacket struct {
 	EmitAt time.Time
 }
 
-func NewReceiverBuffer(bufferDelay time.Duration) *ReceiverBuffer {
+func NewReceiverBuffer(index int, bufferDelay time.Duration) *ReceiverBuffer {
 	buffer := make([]*EnqueuedPacket, math.MaxUint16)
 
 	r := &ReceiverBuffer{
+		index:       index,
 		buffer:      buffer,
 		bufferDelay: bufferDelay,
 		EmitCh:      make(chan *srt.DataPacket, math.MaxUint16),
@@ -61,9 +63,8 @@ func (r *ReceiverBuffer) runEventLoop() {
 					return
 				}
 				// add this packet.
-				if p.SequenceNumber() < r.tail {
+				if p.SequenceNumber() <= r.tail {
 					// packet too old, immediately transmit.
-					fmt.Printf("recovered seq %d\n", p.SequenceNumber())
 					r.EmitCh <- p
 					continue
 				}
@@ -89,9 +90,12 @@ func (r *ReceiverBuffer) runEventLoop() {
 						r.tail++
 					}
 					if r.tail != start {
-						fmt.Printf("misisng packets %d - %d (%d)\n", start, r.tail, r.tail-start)
 						// write a nak.
-						r.MissingCh <- srt.NewNakControlPacket(start, r.tail)
+						if r.index > 0 {
+							r.MissingCh <- srt.NewMultipathNackControlPacket(start, r.tail)
+						} else {
+							fmt.Printf("missing packets %d - %d (%d)\n", start, r.tail, r.tail-start)
+						}
 					}
 				}
 			}
