@@ -105,6 +105,7 @@ func (m *Muxer) readLoop(listen, dial *net.UDPAddr) {
 									sessionsLock.Unlock()
 								}
 							}
+							fmt.Printf("%v\n", session.sources)
 							for _, senderAddr := range session.sources {
 								if _, err := r.WriteToUDP(buffer[:n], senderAddr); err != nil {
 									fmt.Printf("error writing response %v\n", err)
