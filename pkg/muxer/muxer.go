@@ -24,7 +24,7 @@ func NewMuxer(options ...func(*Muxer)) *Muxer {
 }
 
 func (m *Muxer) Start(listen, dial *net.UDPAddr) {
-	m.readLoop(listen, dial)
+	go m.readLoop(listen, dial)
 }
 
 func (m *Muxer) readLoop(listen, dial *net.UDPAddr) {
@@ -38,22 +38,12 @@ func (m *Muxer) readLoop(listen, dial *net.UDPAddr) {
 	// measure bitrate in 2-second blocks.
 	meter := NewMeter(2 * time.Second)
 
-	var pin *net.UDPAddr
-
 	for {
 		msg := make([]byte, 2048)
 		n, senderAddr, err := r.ReadFromUDP(msg)
 		if err != nil {
 			fmt.Printf("error reading %v\n", err)
 			break
-		}
-		if pin == nil {
-			pin = senderAddr
-		} else if pin.String() != senderAddr.String() {
-			// restart the entire process.
-			// TODO: fix this hack.
-			r.Close()
-			return
 		}
 
 		if meter.IsExpired() {
@@ -169,6 +159,7 @@ func (m *Muxer) readLoop(listen, dial *net.UDPAddr) {
 				sessionsLock.RUnlock()
 			}
 		}
+
 	}
 }
 
