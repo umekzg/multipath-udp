@@ -3,11 +3,19 @@ package srt
 import (
 	"encoding/binary"
 	"errors"
+	"time"
 )
+
+type PacketType uint16
 
 type ControlType uint16
 
 type Subtype uint16
+
+const (
+	PacketTypeControlPacket PacketType = 0x8000
+	PacketTypeDataPacket    PacketType = 0x0000
+)
 
 const (
 	ControlTypeHandshake   ControlType = 0x0000
@@ -30,10 +38,8 @@ type ControlPacket struct {
 
 func NewMultipathAckControlPacket(pps uint32) *ControlPacket {
 	pkt := make([]byte, 16)
-	pkt[0] = 0xFF
-	pkt[1] = 0xFF
-	pkt[2] = 0x00
-	pkt[3] = 0x02
+	binary.BigEndian.PutUint16(pkt[0:2], uint16(PacketTypeControlPacket)|uint16(ControlTypeUserDefined))
+	binary.BigEndian.PutUint16(pkt[2:4], uint16(SubtypeMultipathAck))
 	binary.BigEndian.PutUint32(pkt[4:8], pps)
 	return &ControlPacket{RawPacket: pkt}
 }
@@ -76,11 +82,17 @@ func (p ControlPacket) HandshakeSocketId() uint32 {
 
 func NewMultipathNackControlPacket(from, to uint32) *ControlPacket {
 	pkt := make([]byte, 24)
-	pkt[0] = 0xFF
-	pkt[1] = 0xFF
-	pkt[2] = 0x00
-	pkt[3] = 0x03
+	binary.BigEndian.PutUint16(pkt[0:2], uint16(PacketTypeControlPacket)|uint16(ControlTypeUserDefined))
+	binary.BigEndian.PutUint16(pkt[2:4], uint16(SubtypeMultipathNak))
 	binary.BigEndian.PutUint32(pkt[16:20], from)
 	binary.BigEndian.PutUint32(pkt[20:24], to)
+	return &ControlPacket{RawPacket: pkt}
+}
+
+func NewKeepAlivePacket(dst uint32) *ControlPacket {
+	pkt := make([]byte, 24)
+	binary.BigEndian.PutUint16(pkt[0:2], uint16(PacketTypeControlPacket)|uint16(ControlTypeKeepalive))
+	binary.BigEndian.PutUint32(pkt[8:12], uint32(time.Now().UnixNano()/1000))
+	binary.BigEndian.PutUint32(pkt[12:16], dst)
 	return &ControlPacket{RawPacket: pkt}
 }

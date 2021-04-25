@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/muxfd/multipath-udp/pkg/interfaces"
 	"github.com/muxfd/multipath-udp/pkg/srt"
@@ -35,7 +36,7 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 		panic(err)
 	}
 
-	sessions := make(map[string]*InterfaceSet)
+	sessions := make(map[string]*Session)
 
 	respCh := make(chan *Message, 128)
 
@@ -55,8 +56,7 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 		saddr := senderAddr.String()
 		session, found := sessions[saddr]
 		if !found {
-			fmt.Printf("new session\n")
-			session = NewInterfaceSet(dial, respCh)
+			session = NewSession(dial, respCh)
 			close := d.interfaceBinder.Bind(session.Add, session.Remove, dial)
 			defer close()
 			defer session.Close()
@@ -77,10 +77,8 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 					switch v := p.(type) {
 					case *srt.ControlPacket:
 						if v.ControlType() == srt.ControlTypeUserDefined && v.Subtype() == srt.SubtypeMultipathAck {
-							// data payload
 							fmt.Printf("recv metrics\n")
 						} else if v.ControlType() == srt.ControlTypeUserDefined && v.Subtype() == srt.SubtypeMultipathNak {
-							// data payload
 							from := binary.BigEndian.Uint32(v.RawPacket[16:20])
 							to := binary.BigEndian.Uint32(v.RawPacket[20:24])
 							for i := from; i < to; i++ {
@@ -96,6 +94,18 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 								}
 							}
 						} else {
+							if v.ControlType() == srt.ControlTypeHandshake && !session.IsNegotiated() {
+								session.SetNegotiated(true)
+								go func(dst uint32) {
+									for {
+										time.Sleep(750 * time.Millisecond)
+										if _, err = r.WriteToUDP(srt.NewKeepAlivePacket(dst).Marshal(), senderAddr); err != nil {
+											fmt.Printf("error writing keep alive %v\n", err)
+											break
+										}
+									}
+								}(v.HandshakeSocketId())
+							}
 							if _, err = r.WriteToUDP(p.Marshal(), senderAddr); err != nil {
 								fmt.Printf("error writing response %v\n", err)
 								break

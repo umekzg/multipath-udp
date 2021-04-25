@@ -14,20 +14,23 @@ type Message struct {
 	msg  []byte
 }
 
-type InterfaceSet struct {
+type Session struct {
 	sync.RWMutex
 	raddr       *net.UDPAddr
 	connections map[string]*net.UDPConn
 	buffer      *buffer.SenderBuffer
 	responseCh  chan *Message
+	negotiated  bool
 }
 
-func NewInterfaceSet(raddr *net.UDPAddr, responseCh chan *Message) *InterfaceSet {
-	return &InterfaceSet{
+func NewSession(raddr *net.UDPAddr, responseCh chan *Message) *Session {
+	return &Session{
 		connections: make(map[string]*net.UDPConn),
 		raddr:       raddr,
 		responseCh:  responseCh,
-		buffer:      buffer.NewSenderBuffer()}
+		buffer:      buffer.NewSenderBuffer(),
+		negotiated:  false,
+	}
 }
 
 func getUDPAddrKey(addr *net.UDPAddr) string {
@@ -38,10 +41,10 @@ func getUDPAddrKey(addr *net.UDPAddr) string {
 	return hex.EncodeToString(addr.IP)
 }
 
-func (i *InterfaceSet) Add(addr *net.UDPAddr) error {
+func (s *Session) Add(addr *net.UDPAddr) error {
 	fmt.Printf("adding interface %v\n", addr)
 	d := &net.Dialer{LocalAddr: addr}
-	c, err := d.Dial("udp", i.raddr.String())
+	c, err := d.Dial("udp", s.raddr.String())
 	if err != nil {
 		return err
 	}
@@ -53,41 +56,53 @@ func (i *InterfaceSet) Add(addr *net.UDPAddr) error {
 			if err != nil {
 				break
 			}
-			i.responseCh <- &Message{msg: msg[:n], addr: w.LocalAddr().(*net.UDPAddr)}
+			s.responseCh <- &Message{msg: msg[:n], addr: w.LocalAddr().(*net.UDPAddr)}
 		}
 	}()
-	i.Lock()
-	i.connections[getUDPAddrKey(addr)] = w
-	i.Unlock()
+	s.Lock()
+	s.connections[getUDPAddrKey(addr)] = w
+	s.Unlock()
 	return nil
 }
 
-func (i *InterfaceSet) Remove(addr *net.UDPAddr) error {
+func (s *Session) Remove(addr *net.UDPAddr) error {
 	fmt.Printf("removing interface %v\n", addr)
-	i.Lock()
-	defer i.Unlock()
+	s.Lock()
+	defer s.Unlock()
 	key := getUDPAddrKey(addr)
-	if conn, ok := i.connections[key]; ok {
+	if conn, ok := s.connections[key]; ok {
 		if err := conn.Close(); err != nil {
 			return err
 		}
 	}
-	delete(i.connections, key)
+	delete(s.connections, key)
 	return nil
 }
 
-func (i *InterfaceSet) Connections() []*net.UDPConn {
-	i.RLock()
-	conns := make([]*net.UDPConn, 0, len(i.connections))
-	for _, conn := range i.connections {
+func (s *Session) Connections() []*net.UDPConn {
+	s.RLock()
+	conns := make([]*net.UDPConn, 0, len(s.connections))
+	for _, conn := range s.connections {
 		conns = append(conns, conn)
 	}
-	i.RUnlock()
+	s.RUnlock()
 	return conns
 }
 
-func (i *InterfaceSet) Close() {
-	for _, conn := range i.connections {
+func (s *Session) IsNegotiated() bool {
+	s.RLock()
+	defer s.RUnlock()
+	return s.negotiated
+}
+
+func (s *Session) SetNegotiated(val bool) {
+	s.Lock()
+	defer s.Unlock()
+	s.negotiated = val
+}
+
+func (s *Session) Close() {
+	for _, conn := range s.connections {
 		conn.Close()
 	}
 }

@@ -63,7 +63,7 @@ func (r *ReceiverBuffer) runEventLoop() {
 					return
 				}
 				// add this packet.
-				if p.SequenceNumber() <= r.tail {
+				if p.SequenceNumber() < r.tail {
 					// packet too old, immediately transmit.
 					r.EmitCh <- p
 					continue

@@ -29,7 +29,7 @@ func newDataPacket(seq uint32) (*srt.DataPacket, error) {
 }
 
 func TestReceiverBuffer_Simple(t *testing.T) {
-	buf := NewReceiverBuffer(100 * time.Millisecond)
+	buf := NewReceiverBuffer(0, 100*time.Millisecond)
 	p1, err := newDataPacket(100)
 	if err != nil {
 		t.Errorf("failed to create packet %v\n", err)
@@ -76,7 +76,7 @@ func TestReceiverBuffer_Simple(t *testing.T) {
 }
 
 func TestReceiverBuffer_TwoPackets(t *testing.T) {
-	buf := NewReceiverBuffer(100 * time.Millisecond)
+	buf := NewReceiverBuffer(0, 100*time.Millisecond)
 	p1, err := newDataPacket(100)
 	if err != nil {
 		t.Errorf("failed to create packet %v\n", err)
@@ -132,7 +132,7 @@ func TestReceiverBuffer_TwoPackets(t *testing.T) {
 }
 
 func TestReceiverBuffer_Deduplicates(t *testing.T) {
-	buf := NewReceiverBuffer(100 * time.Millisecond)
+	buf := NewReceiverBuffer(0, 100*time.Millisecond)
 	p1, err := newDataPacket(100)
 	if err != nil {
 		t.Errorf("failed to create packet %v\n", err)
