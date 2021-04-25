@@ -197,12 +197,6 @@ func (m *Muxer) readLoop(listen *net.UDPAddr) {
 					fmt.Printf("error unmarshalling rtp packet %v\n", err)
 					continue
 				}
-				switch v := p.(type) {
-				case *srt.ControlPacket:
-					if v.ControlType() == srt.ControlTypeHandshake {
-						handshaken = false
-					}
-				}
 
 				m.buf.Add(p)
 			}
