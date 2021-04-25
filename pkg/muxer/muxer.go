@@ -115,7 +115,7 @@ func (m *Muxer) readLoop(listen, dial *net.UDPAddr) {
 								}
 							}
 							for _, senderAddr := range session.sources {
-								if _, err := r.WriteToUDP(buffer[:n], senderAddr); err != nil {
+								if m, err := r.WriteToUDP(buffer[:n], senderAddr); err != nil || n != m {
 									fmt.Printf("error writing response %v\n", err)
 									break
 								}
@@ -129,7 +129,7 @@ func (m *Muxer) readLoop(listen, dial *net.UDPAddr) {
 							if !ok {
 								break
 							}
-							if _, err := session.SRTConn.Write(msg.Marshal()); err != nil {
+							if n, err := session.SRTConn.Write(msg.Marshal()); err != nil || n != len(msg.Marshal()) {
 								fmt.Printf("error writing to srt %v\n", err)
 							}
 						}
@@ -151,7 +151,7 @@ func (m *Muxer) readLoop(listen, dial *net.UDPAddr) {
 					}()
 				}
 				session.AddSender(senderAddr)
-				if _, err := session.SRTConn.Write(v.Marshal()); err != nil {
+				if n, err := session.SRTConn.Write(v.Marshal()); err != nil || n != len(v.Marshal()) {
 					fmt.Printf("error writing to srt %v\n", err)
 				}
 			} else {
@@ -159,7 +159,7 @@ func (m *Muxer) readLoop(listen, dial *net.UDPAddr) {
 				sessionsLock.RLock()
 				if session, ok := sessions[socketId]; ok {
 					session.AddSender(senderAddr)
-					if _, err := session.SRTConn.Write(v.Marshal()); err != nil {
+					if n, err := session.SRTConn.Write(v.Marshal()); err != nil || n != len(v.Marshal()) {
 						fmt.Printf("error writing to srt %v\n", err)
 					}
 				} else {
