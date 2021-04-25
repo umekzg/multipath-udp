@@ -149,7 +149,7 @@ func (m *Muxer) readLoop(listen *net.UDPAddr) {
 	// counts := make(map[string]int)
 
 	var wg sync.WaitGroup
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 1; i++ {
 		wg.Add(1)
 		go func() {
 			for {
