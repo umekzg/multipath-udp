@@ -39,7 +39,7 @@ func (m *Meter) Expire(sink func(*net.UDPAddr, uint32)) {
 		}
 		go sink(sender, ct)
 	}
-	m.counts = make(map[string]uint32)
+	// m.counts = make(map[string]uint32)
 	m.expiration = time.Now().Add(m.interval)
 }
 
