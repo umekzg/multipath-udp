@@ -4,9 +4,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
-	"time"
 
-	"github.com/muxfd/multipath-udp/pkg/meter"
 	"github.com/muxfd/multipath-udp/pkg/srt"
 )
 
@@ -37,7 +35,6 @@ func (m *Muxer) readLoop(listen, dial *net.UDPAddr) {
 	var sessionsLock sync.RWMutex
 	sessions := make(map[uint32]*Session)
 	// measure bitrate in 2-second blocks.
-	recvMeter := meter.NewMeter(2 * time.Second)
 
 	for {
 		msg := make([]byte, 2048)
@@ -46,15 +43,6 @@ func (m *Muxer) readLoop(listen, dial *net.UDPAddr) {
 			fmt.Printf("error reading %v\n", err)
 			break
 		}
-
-		if recvMeter.IsExpired() {
-			recvMeter.Expire(func(sender *net.UDPAddr, ct uint32) {
-				p := srt.NewMultipathAckControlPacket(ct)
-				fmt.Printf("sender %v ct %d\n", sender, ct)
-				r.WriteToUDP(p.Marshal(), sender)
-			})
-		}
-		recvMeter.Increment(senderAddr)
 
 		p, err := srt.Unmarshal(msg[:n])
 		if err != nil {

@@ -5,12 +5,10 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
-	"sort"
 	"sync"
 	"time"
 
 	"github.com/muxfd/multipath-udp/pkg/buffer"
-	"github.com/muxfd/multipath-udp/pkg/meter"
 )
 
 type Message struct {
@@ -19,8 +17,10 @@ type Message struct {
 }
 
 type Connection struct {
+	sync.RWMutex
 	key     string
 	conn    *net.UDPConn
+	weight  uint32
 	deleted bool
 }
 
@@ -28,10 +28,6 @@ type Session struct {
 	sync.RWMutex
 	raddr       *net.UDPAddr
 	connections []*Connection
-
-	sendMeter *meter.Meter
-	sendCt    map[string]uint32
-	recvCt    map[string]uint32
 
 	buffer     *buffer.SenderBuffer
 	responseCh chan *Message
@@ -41,9 +37,6 @@ type Session struct {
 func NewSession(raddr *net.UDPAddr, responseCh chan *Message) *Session {
 	return &Session{
 		connections: make([]*Connection, 0, 5),
-		sendMeter:   meter.NewMeter(2 * time.Second),
-		sendCt:      make(map[string]uint32),
-		recvCt:      make(map[string]uint32),
 		raddr:       raddr,
 		responseCh:  responseCh,
 		buffer:      buffer.NewSenderBuffer(),
@@ -77,12 +70,24 @@ func (s *Session) Add(addr *net.UDPAddr) error {
 			s.responseCh <- &Message{msg: msg[:n], addr: w.LocalAddr().(*net.UDPAddr)}
 		}
 	}()
-	s.Lock()
-	s.connections = append(s.connections, &Connection{
+	conn := &Connection{
 		key:     getUDPAddrKey(addr),
 		conn:    w,
 		deleted: false,
-	})
+		weight:  60,
+	}
+	go func() {
+		for {
+			time.Sleep(1 * time.Second)
+			conn.Lock()
+			if conn.weight < 60 {
+				conn.weight += 1
+			}
+			conn.Unlock()
+		}
+	}()
+	s.Lock()
+	s.connections = append(s.connections, conn)
 	s.Unlock()
 	return nil
 }
@@ -102,63 +107,47 @@ func (s *Session) Remove(addr *net.UDPAddr) error {
 	return nil
 }
 
-func (s *Session) SetRecvCount(addr *net.UDPAddr, val uint32) {
-	s.Lock()
-	defer s.Unlock()
-	s.recvCt[addr.String()] = val
-}
-
-func (s *Session) SetSendCount(addr *net.UDPAddr, val uint32) {
-	s.Lock()
-	defer s.Unlock()
-	s.sendCt[addr.String()] = val
-}
-
-func (s *Session) getPacketsInFlight(addr *net.UDPAddr) uint32 {
-	send := s.sendCt[addr.String()]
-	recv := s.recvCt[addr.String()]
-	if recv > send {
-		// just a time desync
-		return 0
-	}
-	return send - recv // number of packets in flight, approx.
-}
-
-func (s *Session) Connections(count int) []*net.UDPConn {
-	if count <= 0 {
-		return make([]*net.UDPConn, 0)
-	}
-	s.RLock()
-	if count < s.NumConnections() {
-		sort.Slice(s.connections, func(i, j int) bool {
-			a := s.connections[i].conn.LocalAddr().(*net.UDPAddr)
-			b := s.connections[j].conn.LocalAddr().(*net.UDPAddr)
-			return s.getPacketsInFlight(a) < s.getPacketsInFlight(b)
-		})
-	}
-	if rand.Float64() < 0.001 {
-		for _, conn := range s.connections {
-			addr := conn.conn.LocalAddr().(*net.UDPAddr)
-			fmt.Printf("conn %v pkts in flight %d (%d, %d)\n",
-				conn.conn,
-				s.getPacketsInFlight(addr),
-				s.sendCt[addr.String()],
-				s.recvCt[addr.String()])
-		}
-	}
-	result := make([]*net.UDPConn, 0, count)
-	for i, conn := range s.connections {
-		if i >= count {
-			break
-		}
+func (s *Session) Connections() []*net.UDPConn {
+	result := make([]*net.UDPConn, 0, len(s.connections))
+	for _, conn := range s.connections {
 		result = append(result, conn.conn)
 	}
 	s.RUnlock()
 	return result
 }
 
+func (s *Session) ChooseConnection() *net.UDPConn {
+	totalWeights := 0
+	for _, conn := range s.connections {
+		totalWeights += int(conn.weight)
+	}
+	choice := rand.Intn(totalWeights)
+	cumulative := 0
+	for _, conn := range s.connections {
+		cumulative += int(conn.weight)
+		if cumulative > choice {
+			return conn.conn
+		}
+	}
+	return s.connections[len(s.connections)-1].conn
+}
+
 func (s *Session) NumConnections() int {
 	return len(s.connections)
+}
+
+func (s *Session) Deduct(senderAddr *net.UDPAddr) {
+	s.Lock()
+	defer s.Unlock()
+	for _, conn := range s.connections {
+		if conn.conn.LocalAddr().(*net.UDPAddr).String() == senderAddr.String() {
+			conn.Lock()
+			if conn.weight > 1 {
+				conn.weight--
+			}
+			conn.Unlock()
+		}
+	}
 }
 
 func (s *Session) Close() {

@@ -80,8 +80,6 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 						switch v.ControlType() {
 						case srt.ControlTypeUserDefined:
 							switch v.Subtype() {
-							case srt.SubtypeMultipathAck:
-								session.SetRecvCount(resp.addr, v.TypeSpecificInformation())
 							case srt.SubtypeMultipathNak:
 								timestamp := v.Timestamp()
 								if nakTimestamps[timestamp] {
@@ -89,21 +87,19 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 									continue PACKET
 								}
 								nakTimestamps[timestamp] = true
-								severity := v.TypeSpecificInformation()
+								// severity := v.TypeSpecificInformation()
 								from := binary.BigEndian.Uint32(v.RawPacket[16:20])
 								to := binary.BigEndian.Uint32(v.RawPacket[20:24])
 								for i := from; i < to; i++ {
-									msg := session.buffer.Get(i)
-									if msg == nil || msg.SequenceNumber() != i {
+									pkt := session.buffer.Get(i)
+									if pkt == nil || pkt.Data.SequenceNumber() != i {
 										fmt.Printf("failed to fulfill nak %d\n", i)
 										continue
 									}
-									count := session.NumConnections() - int(severity)
-									if count < 1 {
-										count = 1
-									}
-									for _, conn := range session.Connections(count) {
-										if _, err = conn.Write(msg.Marshal()); err != nil {
+									// find out who this packet belonged to, dock a point from them.
+									session.Deduct(pkt.Sender)
+									for _, conn := range session.Connections() {
+										if _, err = conn.Write(pkt.Data.Marshal()); err != nil {
 											fmt.Printf("error writing pkt %v\n", err)
 										}
 									}
@@ -125,21 +121,14 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 			}()
 		}
 
-		// check the meters.
-		if session.sendMeter.IsExpired() {
-			session.sendMeter.Expire(session.SetSendCount)
-		}
-
+		conn := session.ChooseConnection()
+		addr := conn.LocalAddr().(*net.UDPAddr)
 		switch v := p.(type) {
 		case *srt.DataPacket:
-			session.buffer.Add(v)
+			session.buffer.Add(addr, v)
 		}
-		conns := session.Connections(1)
-		for _, conn := range conns {
-			session.sendMeter.Increment(conn.LocalAddr().(*net.UDPAddr))
-			if _, err = conn.Write(buf[:n]); err != nil {
-				fmt.Printf("error writing pkt %v\n", err)
-			}
+		if _, err = conn.Write(buf[:n]); err != nil {
+			fmt.Printf("error writing pkt %v\n", err)
 		}
 	}
 }
