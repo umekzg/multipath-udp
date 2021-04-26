@@ -41,7 +41,7 @@ type Session struct {
 func NewSession(raddr *net.UDPAddr, responseCh chan *Message) *Session {
 	return &Session{
 		connections: make([]*Connection, 0, 5),
-		sendMeter:   meter.NewMeter(1 * time.Second),
+		sendMeter:   meter.NewMeter(2 * time.Second),
 		sendCt:      make(map[string]uint32),
 		recvCt:      make(map[string]uint32),
 		raddr:       raddr,
