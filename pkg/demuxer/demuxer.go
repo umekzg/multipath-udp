@@ -37,8 +37,6 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 
 	sessions := make(map[string]*Session)
 
-	rr := 0
-
 	for {
 		var buf [1500]byte
 		n, senderAddr, err := r.ReadFromUDP(buf[0:])
@@ -51,6 +49,7 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 			fmt.Printf("not a valid srt packet\n")
 			continue
 		}
+
 		saddr := senderAddr.String()
 		session, found := sessions[saddr]
 		if !found {
@@ -63,6 +62,8 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 			sessions[saddr] = session
 
 			go func() {
+				nakTimestamps := make(map[uint32]bool)
+			PACKET:
 				for {
 					resp, ok := <-respCh
 					if !ok {
@@ -76,60 +77,76 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 					}
 					switch v := p.(type) {
 					case *srt.ControlPacket:
-						if v.ControlType() == srt.ControlTypeUserDefined && v.Subtype() == srt.SubtypeMultipathAck {
-							fmt.Printf("recv metrics\n")
-						} else if v.ControlType() == srt.ControlTypeUserDefined && v.Subtype() == srt.SubtypeMultipathNak {
-							from := binary.BigEndian.Uint32(v.RawPacket[16:20])
-							to := binary.BigEndian.Uint32(v.RawPacket[20:24])
-							for i := from; i < to; i++ {
-								msg := session.buffer.Get(i)
-								if msg == nil || msg.SequenceNumber() != i {
-									fmt.Printf("failed to fulfill nak %d\n", i)
-									break
+						switch v.ControlType() {
+						case srt.ControlTypeUserDefined:
+							switch v.Subtype() {
+							case srt.SubtypeMultipathAck:
+								session.SetRecvCount(resp.addr, v.TypeSpecificInformation())
+							case srt.SubtypeMultipathNak:
+								timestamp := v.Timestamp()
+								if nakTimestamps[timestamp] {
+									// already processed
+									continue PACKET
 								}
-								for _, conn := range session.Connections() {
-									if _, err = conn.Write(msg.Marshal()); err != nil {
-										fmt.Printf("error writing pkt %v\n", err)
+								nakTimestamps[timestamp] = true
+								severity := v.TypeSpecificInformation()
+								from := binary.BigEndian.Uint32(v.RawPacket[16:20])
+								to := binary.BigEndian.Uint32(v.RawPacket[20:24])
+								for i := from; i < to; i++ {
+									msg := session.buffer.Get(i)
+									if msg == nil || msg.SequenceNumber() != i {
+										fmt.Printf("failed to fulfill nak %d\n", i)
+										continue
+									}
+									count := session.NumConnections() - int(severity)
+									if count < 1 {
+										count = 1
+									}
+									for _, conn := range session.Connections(count) {
+										if _, err = conn.Write(msg.Marshal()); err != nil {
+											fmt.Printf("error writing pkt %v\n", err)
+										}
 									}
 								}
 							}
-						} else {
+						default:
 							if n, err := r.WriteToUDP(p.Marshal(), senderAddr); err != nil || n != len(p.Marshal()) {
 								fmt.Printf("error writing response %v\n", err)
-								break
+								continue PACKET
 							}
 						}
 					case *srt.DataPacket:
 						if _, err = r.WriteToUDP(p.Marshal(), senderAddr); err != nil {
 							fmt.Printf("error writing response %v\n", err)
-							break
+							continue PACKET
 						}
 					}
 				}
 			}()
 		}
 
+		// check the meters.
+		if session.sendMeter.IsExpired() {
+			session.sendMeter.Expire(session.SetSendCount)
+		}
+
 		switch v := p.(type) {
 		case *srt.DataPacket:
 			session.buffer.Add(v)
-
-			conns := session.Connections()
-			if len(conns) == 0 {
-				fmt.Printf("no connections\n")
-				break
-			}
-			conn := conns[rr%len(conns)]
-			if _, err = conn.Write(buf[:n]); err != nil {
-				fmt.Printf("error writing pkt %v\n", err)
+			conns := session.Connections(1)
+			for _, conn := range conns {
+				if _, err = conn.Write(buf[:n]); err != nil {
+					fmt.Printf("error writing pkt %v\n", err)
+				}
 			}
 		case *srt.ControlPacket:
-			for _, conn := range session.Connections() {
+			// these aren't frequent, so just blast them.
+			for _, conn := range session.Connections(session.NumConnections()) {
 				if _, err = conn.Write(buf[:n]); err != nil {
 					fmt.Printf("error writing pkt %v\n", err)
 				}
 			}
 		}
-		rr++
 	}
 }
 

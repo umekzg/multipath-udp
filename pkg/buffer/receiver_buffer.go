@@ -10,7 +10,7 @@ import (
 
 // ReceiverBuffer represents a linear buffer that discards based on the sequence number.
 type ReceiverBuffer struct {
-	index  int
+	index  uint32
 	buffer []*EnqueuedPacket
 	count  int
 	tail   uint32
@@ -28,7 +28,7 @@ type EnqueuedPacket struct {
 	EmitAt time.Time
 }
 
-func NewReceiverBuffer(index int, bufferDelay time.Duration) *ReceiverBuffer {
+func NewReceiverBuffer(index uint32, bufferDelay time.Duration) *ReceiverBuffer {
 	buffer := make([]*EnqueuedPacket, math.MaxUint16)
 
 	r := &ReceiverBuffer{
@@ -92,7 +92,7 @@ func (r *ReceiverBuffer) runEventLoop() {
 					if r.tail != start {
 						// write a nak.
 						if r.index > 0 {
-							r.MissingCh <- srt.NewMultipathNackControlPacket(start, r.tail)
+							r.MissingCh <- srt.NewMultipathNackControlPacket(r.index, start, r.tail)
 						} else {
 							fmt.Printf("missing packets %d - %d (%d)\n", start, r.tail, r.tail-start)
 						}

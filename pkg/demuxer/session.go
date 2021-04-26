@@ -4,9 +4,12 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net"
+	"sort"
 	"sync"
+	"time"
 
 	"github.com/muxfd/multipath-udp/pkg/buffer"
+	"github.com/muxfd/multipath-udp/pkg/meter"
 )
 
 type Message struct {
@@ -14,22 +17,38 @@ type Message struct {
 	msg  []byte
 }
 
+type Connection struct {
+	key     string
+	conn    *net.UDPConn
+	deleted bool
+}
+
 type Session struct {
 	sync.RWMutex
 	raddr       *net.UDPAddr
-	connections map[string]*net.UDPConn
-	buffer      *buffer.SenderBuffer
-	responseCh  chan *Message
-	negotiated  bool
+	connections []*Connection
+
+	sendMeter       *meter.Meter
+	sendCt          map[string]uint32
+	recvCt          map[string]uint32
+	roundRobinIndex int
+
+	buffer     *buffer.SenderBuffer
+	responseCh chan *Message
+	negotiated bool
 }
 
 func NewSession(raddr *net.UDPAddr, responseCh chan *Message) *Session {
 	return &Session{
-		connections: make(map[string]*net.UDPConn),
-		raddr:       raddr,
-		responseCh:  responseCh,
-		buffer:      buffer.NewSenderBuffer(),
-		negotiated:  false,
+		connections:     make([]*Connection, 0, 5),
+		sendMeter:       meter.NewMeter(1 * time.Second),
+		sendCt:          make(map[string]uint32),
+		recvCt:          make(map[string]uint32),
+		roundRobinIndex: 0,
+		raddr:           raddr,
+		responseCh:      responseCh,
+		buffer:          buffer.NewSenderBuffer(),
+		negotiated:      false,
 	}
 }
 
@@ -60,7 +79,11 @@ func (s *Session) Add(addr *net.UDPAddr) error {
 		}
 	}()
 	s.Lock()
-	s.connections[getUDPAddrKey(addr)] = w
+	s.connections = append(s.connections, &Connection{
+		key:     getUDPAddrKey(addr),
+		conn:    w,
+		deleted: false,
+	})
 	s.Unlock()
 	return nil
 }
@@ -70,27 +93,67 @@ func (s *Session) Remove(addr *net.UDPAddr) error {
 	s.Lock()
 	defer s.Unlock()
 	key := getUDPAddrKey(addr)
-	if conn, ok := s.connections[key]; ok {
-		if err := conn.Close(); err != nil {
-			return err
+	for _, conn := range s.connections {
+		if !conn.deleted && conn.key == key {
+			if err := conn.conn.Close(); err != nil {
+				return err
+			}
 		}
 	}
-	delete(s.connections, key)
 	return nil
 }
 
-func (s *Session) Connections() []*net.UDPConn {
+func (s *Session) SetRecvCount(addr *net.UDPAddr, val uint32) {
+	s.Lock()
+	defer s.Unlock()
+	s.recvCt[addr.String()] = val
+}
+
+func (s *Session) SetSendCount(addr *net.UDPAddr, val uint32) {
+	s.Lock()
+	defer s.Unlock()
+	s.sendCt[addr.String()] = val
+}
+
+func (s *Session) getPacketsInFlight(addr *net.UDPAddr) uint32 {
+	send := s.sendCt[addr.String()]
+	recv := s.recvCt[addr.String()]
+	if recv > send {
+		// just a time desync
+		return 0
+	}
+	return send - recv // number of packets in flight, approx.
+}
+
+func (s *Session) Connections(count int) []*net.UDPConn {
+	if count <= 0 {
+		return make([]*net.UDPConn, 0)
+	}
 	s.RLock()
-	conns := make([]*net.UDPConn, 0, len(s.connections))
-	for _, conn := range s.connections {
-		conns = append(conns, conn)
+	if count < s.NumConnections() {
+		sort.Slice(s.connections, func(i, j int) bool {
+			a := s.connections[i].conn.LocalAddr().(*net.UDPAddr)
+			b := s.connections[j].conn.LocalAddr().(*net.UDPAddr)
+			return s.getPacketsInFlight(a) < s.getPacketsInFlight(b)
+		})
+	}
+	result := make([]*net.UDPConn, 0, count)
+	for i, conn := range s.connections {
+		if i >= count {
+			break
+		}
+		result = append(result, conn.conn)
 	}
 	s.RUnlock()
-	return conns
+	return result
+}
+
+func (s *Session) NumConnections() int {
+	return len(s.connections)
 }
 
 func (s *Session) Close() {
 	for _, conn := range s.connections {
-		conn.Close()
+		conn.conn.Close()
 	}
 }

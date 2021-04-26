@@ -80,10 +80,12 @@ func (p ControlPacket) HandshakeSocketId() uint32 {
 	return binary.BigEndian.Uint32(p.RawPacket[40:44])
 }
 
-func NewMultipathNackControlPacket(from, to uint32) *ControlPacket {
+func NewMultipathNackControlPacket(severity, from, to uint32) *ControlPacket {
 	pkt := make([]byte, 24)
 	binary.BigEndian.PutUint16(pkt[0:2], uint16(PacketTypeControlPacket)|uint16(ControlTypeUserDefined))
 	binary.BigEndian.PutUint16(pkt[2:4], uint16(SubtypeMultipathNak))
+	binary.BigEndian.PutUint32(pkt[4:8], severity)
+	binary.BigEndian.PutUint32(pkt[8:12], uint32(time.Now().UnixNano()/1000))
 	binary.BigEndian.PutUint32(pkt[16:20], from)
 	binary.BigEndian.PutUint32(pkt[20:24], to)
 	return &ControlPacket{RawPacket: pkt}

@@ -17,7 +17,7 @@ type CompositeReceiverBuffer struct {
 }
 
 func NewCompositeReceiverBuffer(delays ...time.Duration) *CompositeReceiverBuffer {
-	if len(delays) == 0 {
+	if len(delays) == 0 || len(delays) > math.MaxUint32 {
 		panic("lmao")
 	}
 
@@ -30,7 +30,7 @@ func NewCompositeReceiverBuffer(delays ...time.Duration) *CompositeReceiverBuffe
 
 	cumulative := delays[0]
 	for i, delay := range delays {
-		r.buffers[i] = NewReceiverBuffer(len(delays)-i-1, cumulative)
+		r.buffers[i] = NewReceiverBuffer(uint32(len(delays)-i-1), cumulative)
 		cumulative += delay
 		source := r.pushCh
 		if i > 0 {
