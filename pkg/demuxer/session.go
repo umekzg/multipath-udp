@@ -3,6 +3,7 @@ package demuxer
 import (
 	"encoding/hex"
 	"fmt"
+	"math/rand"
 	"net"
 	"sort"
 	"sync"
@@ -28,10 +29,9 @@ type Session struct {
 	raddr       *net.UDPAddr
 	connections []*Connection
 
-	sendMeter       *meter.Meter
-	sendCt          map[string]uint32
-	recvCt          map[string]uint32
-	roundRobinIndex int
+	sendMeter *meter.Meter
+	sendCt    map[string]uint32
+	recvCt    map[string]uint32
 
 	buffer     *buffer.SenderBuffer
 	responseCh chan *Message
@@ -40,15 +40,14 @@ type Session struct {
 
 func NewSession(raddr *net.UDPAddr, responseCh chan *Message) *Session {
 	return &Session{
-		connections:     make([]*Connection, 0, 5),
-		sendMeter:       meter.NewMeter(1 * time.Second),
-		sendCt:          make(map[string]uint32),
-		recvCt:          make(map[string]uint32),
-		roundRobinIndex: 0,
-		raddr:           raddr,
-		responseCh:      responseCh,
-		buffer:          buffer.NewSenderBuffer(),
-		negotiated:      false,
+		connections: make([]*Connection, 0, 5),
+		sendMeter:   meter.NewMeter(1 * time.Second),
+		sendCt:      make(map[string]uint32),
+		recvCt:      make(map[string]uint32),
+		raddr:       raddr,
+		responseCh:  responseCh,
+		buffer:      buffer.NewSenderBuffer(),
+		negotiated:  false,
 	}
 }
 
@@ -136,6 +135,16 @@ func (s *Session) Connections(count int) []*net.UDPConn {
 			b := s.connections[j].conn.LocalAddr().(*net.UDPAddr)
 			return s.getPacketsInFlight(a) < s.getPacketsInFlight(b)
 		})
+	}
+	if rand.Float64() < 0.001 {
+		for _, conn := range s.connections {
+			addr := conn.conn.LocalAddr().(*net.UDPAddr)
+			fmt.Printf("conn %v pkts in flight %d (%d, %d)\n",
+				conn.conn,
+				s.getPacketsInFlight(addr),
+				s.sendCt[addr.String()],
+				s.recvCt[addr.String()])
+		}
 	}
 	result := make([]*net.UDPConn, 0, count)
 	for i, conn := range s.connections {
