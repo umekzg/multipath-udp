@@ -17,7 +17,7 @@ type CompositeReceiverBuffer struct {
 }
 
 func NewCompositeReceiverBuffer(delays ...time.Duration) *CompositeReceiverBuffer {
-	if len(delays) == 0 || len(delays) > math.MaxUint32 {
+	if len(delays) == 0 {
 		panic("lmao")
 	}
 
