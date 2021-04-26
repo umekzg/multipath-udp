@@ -135,6 +135,7 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 			session.buffer.Add(v)
 			conns := session.Connections(1)
 			for _, conn := range conns {
+				session.sendMeter.Increment(conn.LocalAddr().(*net.UDPAddr))
 				if _, err = conn.Write(buf[:n]); err != nil {
 					fmt.Printf("error writing pkt %v\n", err)
 				}
@@ -142,6 +143,7 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 		case *srt.ControlPacket:
 			// these aren't frequent, so just blast them.
 			for _, conn := range session.Connections(session.NumConnections()) {
+				session.sendMeter.Increment(conn.LocalAddr().(*net.UDPAddr))
 				if _, err = conn.Write(buf[:n]); err != nil {
 					fmt.Printf("error writing pkt %v\n", err)
 				}
