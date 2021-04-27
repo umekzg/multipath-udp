@@ -3,6 +3,7 @@ package demuxer
 import (
 	"encoding/binary"
 	"fmt"
+	"math/rand"
 	"net"
 
 	"github.com/muxfd/multipath-udp/pkg/interfaces"
@@ -138,6 +139,10 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 
 		switch v := p.(type) {
 		case *srt.DataPacket:
+			if rand.Float64() < 0.025 {
+				// temp drop
+				break
+			}
 			conn := session.ChooseConnection()
 			addr := conn.LocalAddr().(*net.UDPAddr)
 			if v.SequenceNumber() > seq {
