@@ -87,9 +87,10 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 									continue PACKET
 								}
 								nakTimestamps[timestamp] = true
-								// severity := v.TypeSpecificInformation()
+								severity := v.TypeSpecificInformation()
 								from := binary.BigEndian.Uint32(v.RawPacket[16:20])
 								to := binary.BigEndian.Uint32(v.RawPacket[20:24])
+								fmt.Printf("nak %d-%d severity %d\n", from, to, severity)
 								for i := from; i < to; i++ {
 									pkt := session.buffer.Get(i)
 									if pkt == nil {
