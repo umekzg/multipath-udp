@@ -81,7 +81,7 @@ func (s *Session) Add(addr *net.UDPAddr) error {
 			time.Sleep(1 * time.Second)
 			conn.Lock()
 			if conn.weight < 60 {
-				conn.weight += 1
+				conn.weight += 10
 			}
 			conn.Unlock()
 		}
