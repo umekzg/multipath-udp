@@ -31,6 +31,7 @@ func (m *Muxer) readLoop(listen, dial *net.UDPAddr) {
 	if err != nil {
 		panic(err)
 	}
+	r.SetReadBuffer(64 * 1024 * 1024)
 
 	var sessionsLock sync.RWMutex
 	sessions := make(map[uint32]*Session)
