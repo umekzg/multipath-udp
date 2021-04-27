@@ -80,8 +80,9 @@ func (s *Session) Add(addr *net.UDPAddr) error {
 		for {
 			time.Sleep(1 * time.Second)
 			conn.Lock()
+			fmt.Printf("conn\t%v\tweight\t%d\n", conn.key, conn.weight)
 			if conn.weight < 60 {
-				conn.weight += 10
+				conn.weight += 1
 			}
 			conn.Unlock()
 		}
@@ -120,7 +121,6 @@ func (s *Session) Connections() []*net.UDPConn {
 func (s *Session) ChooseConnection() *net.UDPConn {
 	totalWeights := 0
 	for _, conn := range s.connections {
-		fmt.Printf("conn\t%v\tweight\t%d\n", conn.key, conn.weight)
 		totalWeights += int(conn.weight)
 	}
 	choice := rand.Intn(totalWeights)
