@@ -80,6 +80,9 @@ func (s *Session) Add(addr *net.UDPAddr) error {
 		for {
 			time.Sleep(1 * time.Second)
 			conn.Lock()
+			if conn.deleted {
+				break
+			}
 			fmt.Printf("conn\t%v\tweight\t%d\n", conn.key, conn.weight)
 			if conn.weight < 60 {
 				conn.weight += 1

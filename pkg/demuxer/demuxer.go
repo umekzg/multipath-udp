@@ -129,6 +129,7 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 		}
 		if _, err = conn.Write(buf[:n]); err != nil {
 			fmt.Printf("error writing pkt %v\n", err)
+			session.Remove(conn.LocalAddr().(*net.UDPAddr))
 		}
 	}
 }
