@@ -118,7 +118,7 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 								}
 							}
 						case srt.ControlTypeHandshake:
-							fmt.Printf("handshake %d -> %d\n", v.DestinationSocketId(), v.HandshakeSocketId())
+							fmt.Printf("handshake %d <- %d\n", v.DestinationSocketId(), v.HandshakeSocketId())
 							fallthrough
 						default:
 							if n, err := r.WriteToUDP(p.Marshal(), senderAddr); err != nil || n != len(p.Marshal()) {
@@ -163,7 +163,7 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 		case *srt.ControlPacket:
 			switch v.ControlType() {
 			case srt.ControlTypeHandshake:
-				fmt.Printf("handshake %d -> %d\n", v.DestinationSocketId(), v.HandshakeSocketId())
+				fmt.Printf("handshake %d -> %d\n", v.HandshakeSocketId(), v.DestinationSocketId())
 			}
 			for _, conn := range session.Connections() {
 				if _, err = conn.Write(buf[:n]); err != nil {
