@@ -163,6 +163,7 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 		case *srt.ControlPacket:
 			switch v.ControlType() {
 			case srt.ControlTypeHandshake:
+				session.socketId = v.HandshakeSocketId()
 				fmt.Printf("handshake %d -> %d\n", v.HandshakeSocketId(), v.DestinationSocketId())
 			}
 			for _, conn := range session.Connections() {
