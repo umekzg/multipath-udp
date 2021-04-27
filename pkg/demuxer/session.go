@@ -101,14 +101,20 @@ func (s *Session) Remove(addr *net.UDPAddr) error {
 	s.Lock()
 	defer s.Unlock()
 	key := getUDPAddrKey(addr)
-	for _, conn := range s.connections {
-		if !conn.deleted && conn.key == key {
+	for i, conn := range s.connections {
+		if conn.key == key {
 			conn.Lock()
-			conn.deleted = true
 			if err := conn.conn.Close(); err != nil {
 				return err
+			} else {
+				conn.deleted = true
 			}
 			conn.Unlock()
+			ret := make([]*Connection, len(s.connections)-1)
+			copy(ret[:i], s.connections[:i])
+			copy(ret[i:], s.connections[i+1:])
+			s.connections = ret
+			return nil
 		}
 	}
 	return nil
@@ -118,9 +124,7 @@ func (s *Session) Connections() []*net.UDPConn {
 	s.RLock()
 	result := make([]*net.UDPConn, 0, len(s.connections))
 	for _, conn := range s.connections {
-		if !conn.deleted {
-			result = append(result, conn.conn)
-		}
+		result = append(result, conn.conn)
 	}
 	s.RUnlock()
 	return result
@@ -129,16 +133,11 @@ func (s *Session) Connections() []*net.UDPConn {
 func (s *Session) ChooseConnection() *net.UDPConn {
 	totalWeights := 0
 	for _, conn := range s.connections {
-		if !conn.deleted {
-			totalWeights += int(conn.weight)
-		}
+		totalWeights += int(conn.weight)
 	}
 	choice := rand.Intn(totalWeights)
 	cumulative := 0
 	for _, conn := range s.connections {
-		if conn.deleted {
-			continue
-		}
 		cumulative += int(conn.weight)
 		if cumulative > choice {
 			return conn.conn
