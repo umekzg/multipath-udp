@@ -128,11 +128,13 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 			session.buffer.Add(addr, v)
 			if _, err = conn.Write(buf[:n]); err != nil {
 				fmt.Printf("error writing pkt %v\n", err)
+				session.Deduct(conn.LocalAddr().(*net.UDPAddr))
 			}
 		case *srt.ControlPacket:
 			for _, conn := range session.Connections() {
 				if _, err = conn.Write(buf[:n]); err != nil {
 					fmt.Printf("error writing pkt %v\n", err)
+					session.Deduct(conn.LocalAddr().(*net.UDPAddr))
 				}
 			}
 		}
