@@ -21,7 +21,7 @@ func NewSession(dial *net.UDPAddr) (*Session, error) {
 
 	return &Session{
 		SRTConn: conn,
-		buffer:  buffer.NewCompositeReceiverBuffer(200*time.Millisecond, 200*time.Millisecond, 150*time.Millisecond),
+		buffer:  buffer.NewCompositeReceiverBuffer(500*time.Millisecond, 500*time.Millisecond, 500*time.Millisecond),
 		sources: make([]*net.UDPAddr, 0, 5),
 	}, nil
 }
