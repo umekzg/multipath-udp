@@ -103,9 +103,12 @@ func (s *Session) Remove(addr *net.UDPAddr) error {
 	key := getUDPAddrKey(addr)
 	for _, conn := range s.connections {
 		if !conn.deleted && conn.key == key {
+			conn.Lock()
+			conn.deleted = true
 			if err := conn.conn.Close(); err != nil {
 				return err
 			}
+			conn.Unlock()
 		}
 	}
 	return nil
