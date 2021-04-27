@@ -108,6 +108,7 @@ func (s *Session) Remove(addr *net.UDPAddr) error {
 }
 
 func (s *Session) Connections() []*net.UDPConn {
+	s.RLock()
 	result := make([]*net.UDPConn, 0, len(s.connections))
 	for _, conn := range s.connections {
 		result = append(result, conn.conn)
