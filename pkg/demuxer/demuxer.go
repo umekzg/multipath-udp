@@ -55,6 +55,7 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 		saddr := senderAddr.String()
 		session, found := sessions[saddr]
 		if !found {
+			fmt.Printf("new session")
 			respCh := make(chan *Message, 128)
 			session = NewSession(dial, respCh)
 			close := d.interfaceBinder.Bind(session.Add, session.Remove, dial)
