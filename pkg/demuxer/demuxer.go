@@ -55,7 +55,6 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 		saddr := senderAddr.String()
 		session, found := sessions[saddr]
 		if !found {
-			fmt.Printf("new session")
 			respCh := make(chan *Message, 128)
 			session = NewSession(dial, respCh)
 			close := d.interfaceBinder.Bind(session.Add, session.Remove, dial)
@@ -156,6 +155,7 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 				// might be an out of order retransmission.
 				seq = v.SequenceNumber()
 			}
+			fmt.Printf("write\n")
 			session.buffer.Add(addr, v)
 			if _, err = conn.Write(buf[:n]); err != nil {
 				fmt.Printf("error writing pkt %v\n", err)
@@ -166,6 +166,7 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 			case srt.ControlTypeHandshake:
 				fmt.Printf("handshake %d -> %d\n", v.DestinationSocketId(), v.HandshakeSocketId())
 			}
+			fmt.Printf("write\n")
 			for _, conn := range session.Connections() {
 				if _, err = conn.Write(buf[:n]); err != nil {
 					fmt.Printf("error writing pkt %v\n", err)
