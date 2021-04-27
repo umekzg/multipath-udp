@@ -92,8 +92,11 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 								to := binary.BigEndian.Uint32(v.RawPacket[20:24])
 								for i := from; i < to; i++ {
 									pkt := session.buffer.Get(i)
-									if pkt == nil || pkt.Data.SequenceNumber() != i {
-										fmt.Printf("failed to fulfill nak %d\n", i)
+									if pkt == nil {
+										fmt.Printf("failed to fulfill nak %d, packet didn't exist\n", i)
+										continue
+									} else if pkt.Data.SequenceNumber() != i {
+										fmt.Printf("failed to fulfill nak %d, packet elided with %d (diff %d)\n", i, pkt.Data.SequenceNumber(), pkt.Data.SequenceNumber()-i)
 										continue
 									}
 									// find out who this packet belonged to, dock a point from them.
