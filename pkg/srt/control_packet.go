@@ -80,6 +80,27 @@ func (p ControlPacket) HandshakeSocketId() uint32 {
 	return binary.BigEndian.Uint32(p.RawPacket[40:44])
 }
 
+func NewNakRangeControlPacket(socketId, from, to uint32) *ControlPacket {
+	if from == to {
+		return NewNakSingleControlPacket(socketId, from)
+	}
+	pkt := make([]byte, 24)
+	binary.BigEndian.PutUint16(pkt[0:2], uint16(PacketTypeControlPacket)|uint16(ControlTypeNak))
+	binary.BigEndian.PutUint32(pkt[8:12], uint32(time.Now().UnixNano()/1000))
+	binary.BigEndian.PutUint32(pkt[12:16], socketId)
+	binary.BigEndian.PutUint32(pkt[16:20], from)
+	binary.BigEndian.PutUint32(pkt[20:24], to|0x8000)
+	return &ControlPacket{RawPacket: pkt}
+}
+func NewNakSingleControlPacket(socketId, seq uint32) *ControlPacket {
+	pkt := make([]byte, 20)
+	binary.BigEndian.PutUint16(pkt[0:2], uint16(PacketTypeControlPacket)|uint16(ControlTypeNak))
+	binary.BigEndian.PutUint32(pkt[8:12], uint32(time.Now().UnixNano()/1000))
+	binary.BigEndian.PutUint32(pkt[12:16], socketId)
+	binary.BigEndian.PutUint32(pkt[16:20], seq)
+	return &ControlPacket{RawPacket: pkt}
+}
+
 func NewMultipathNackControlPacket(severity, from, to uint32) *ControlPacket {
 	pkt := make([]byte, 24)
 	binary.BigEndian.PutUint16(pkt[0:2], uint16(PacketTypeControlPacket)|uint16(ControlTypeUserDefined))

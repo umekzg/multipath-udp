@@ -16,7 +16,7 @@ type Demuxer struct {
 
 // NewDemuxer creates a new demuxer.
 func NewDemuxer(options ...func(*Demuxer)) *Demuxer {
-	d := &Demuxer{}
+	d := &Demuxer{seq: 0}
 
 	for _, option := range options {
 		option(d)
@@ -35,6 +35,7 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 		panic(err)
 	}
 	r.SetReadBuffer(64 * 1024 * 1024)
+	seq := uint32(0)
 
 	sessions := make(map[string]*Session)
 
@@ -96,6 +97,12 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 									pkt := session.buffer.Get(i)
 									if pkt == nil {
 										fmt.Printf("failed to fulfill nak %d, packet didn't exist\n", i)
+										if _, err := r.WriteToUDP(
+											srt.NewNakSingleControlPacket(session.socketId, i).Marshal(),
+											senderAddr,
+										); err != nil {
+											fmt.Printf("error writing short nak\n")
+										}
 										continue
 									} else if pkt.Data.SequenceNumber() != i {
 										fmt.Printf("failed to fulfill nak %d, packet elided with %d (diff %d)\n", i, pkt.Data.SequenceNumber(), pkt.Data.SequenceNumber()-i)
@@ -110,6 +117,9 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 									}
 								}
 							}
+						case srt.ControlTypeHandshake:
+							fmt.Printf("handshake %d -> %d\n", v.DestinationSocketId(), v.HandshakeSocketId())
+							fallthrough
 						default:
 							if n, err := r.WriteToUDP(p.Marshal(), senderAddr); err != nil || n != len(p.Marshal()) {
 								fmt.Printf("error writing response %v\n", err)
@@ -130,6 +140,19 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 		case *srt.DataPacket:
 			conn := session.ChooseConnection()
 			addr := conn.LocalAddr().(*net.UDPAddr)
+			if v.SequenceNumber() > seq+1 {
+				// emit nak immediately, localhost -> localhost is usually reliably ordered
+				// and if it's not it's cheap to send so whatever.
+				if _, err := r.WriteToUDP(
+					srt.NewNakRangeControlPacket(session.socketId, seq+1, v.SequenceNumber()-1).Marshal(),
+					senderAddr,
+				); err != nil {
+					fmt.Printf("error writing short nak\n")
+				}
+			} else if v.SequenceNumber() > seq {
+				// might be an out of order retransmission.
+				seq = v.SequenceNumber()
+			}
 			session.buffer.Add(addr, v)
 			if _, err = conn.Write(buf[:n]); err != nil {
 				fmt.Printf("error writing pkt %v\n", err)

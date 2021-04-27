@@ -31,7 +31,7 @@ type Session struct {
 
 	buffer     *buffer.SenderBuffer
 	responseCh chan *Message
-	negotiated bool
+	socketId   uint32
 }
 
 func NewSession(raddr *net.UDPAddr, responseCh chan *Message) *Session {
@@ -40,7 +40,6 @@ func NewSession(raddr *net.UDPAddr, responseCh chan *Message) *Session {
 		raddr:       raddr,
 		responseCh:  responseCh,
 		buffer:      buffer.NewSenderBuffer(),
-		negotiated:  false,
 	}
 }
 
