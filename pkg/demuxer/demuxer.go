@@ -16,7 +16,7 @@ type Demuxer struct {
 
 // NewDemuxer creates a new demuxer.
 func NewDemuxer(options ...func(*Demuxer)) *Demuxer {
-	d := &Demuxer{seq: 0}
+	d := &Demuxer{}
 
 	for _, option := range options {
 		option(d)
