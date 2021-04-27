@@ -1,7 +1,6 @@
 package buffer
 
 import (
-	"math"
 	"net"
 
 	"github.com/muxfd/multipath-udp/pkg/srt"
@@ -18,7 +17,7 @@ type SenderBuffer struct {
 }
 
 func NewSenderBuffer() *SenderBuffer {
-	return &SenderBuffer{buf: make([]*Packet, math.MaxUint16)}
+	return &SenderBuffer{buf: make([]*Packet, 1<<24)}
 }
 
 func (b *SenderBuffer) Add(sender *net.UDPAddr, data *srt.DataPacket) {
