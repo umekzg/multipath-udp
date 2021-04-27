@@ -119,6 +119,7 @@ func (s *Session) Connections() []*net.UDPConn {
 func (s *Session) ChooseConnection() *net.UDPConn {
 	totalWeights := 0
 	for _, conn := range s.connections {
+		fmt.Printf("conn\t%v\tweight\t%d\n", conn.key, conn.weight)
 		totalWeights += int(conn.weight)
 	}
 	choice := rand.Intn(totalWeights)
