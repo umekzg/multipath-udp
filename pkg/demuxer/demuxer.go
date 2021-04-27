@@ -145,12 +145,12 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 					// emit nak immediately, localhost -> localhost is usually reliably ordered
 					// and if it's not it's cheap to send so whatever.
 					fmt.Printf("short circuit nak %d-%d (%d)\n", seq+1, v.SequenceNumber()-1, v.SequenceNumber()-seq-1)
-					if _, err := r.WriteToUDP(
-						srt.NewNakRangeControlPacket(session.socketId, seq+1, v.SequenceNumber()-1).Marshal(),
-						senderAddr,
-					); err != nil {
-						fmt.Printf("error writing short nak\n")
-					}
+					// if _, err := r.WriteToUDP(
+					// 	srt.NewNakRangeControlPacket(session.socketId, seq+1, v.SequenceNumber()-1).Marshal(),
+					// 	senderAddr,
+					// ); err != nil {
+					// 	fmt.Printf("error writing short nak\n")
+					// }
 				}
 				// might be an out of order retransmission.
 				seq = v.SequenceNumber()
