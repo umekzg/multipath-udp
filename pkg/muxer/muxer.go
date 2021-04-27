@@ -49,7 +49,6 @@ func (m *Muxer) readLoop(listen, dial *net.UDPAddr) {
 			fmt.Printf("error unmarshalling rtp packet %v\n", err)
 			continue
 		}
-
 		switch v := p.(type) {
 		case *srt.DataPacket:
 			socketId := v.DestinationSocketId()
