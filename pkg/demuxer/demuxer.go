@@ -141,7 +141,7 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 			conn := session.ChooseConnection()
 			addr := conn.LocalAddr().(*net.UDPAddr)
 			if v.SequenceNumber() > seq {
-				if v.SequenceNumber() > seq+1 {
+				if seq > 0 && v.SequenceNumber() > seq+1 {
 					// emit nak immediately, localhost -> localhost is usually reliably ordered
 					// and if it's not it's cheap to send so whatever.
 					fmt.Printf("short circuit nak %d-%d (%d)\n", seq+1, v.SequenceNumber()-1, v.SequenceNumber()-seq-1)
