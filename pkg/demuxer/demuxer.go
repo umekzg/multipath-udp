@@ -140,17 +140,18 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 		case *srt.DataPacket:
 			conn := session.ChooseConnection()
 			addr := conn.LocalAddr().(*net.UDPAddr)
-			if v.SequenceNumber() > seq+1 {
-				// emit nak immediately, localhost -> localhost is usually reliably ordered
-				// and if it's not it's cheap to send so whatever.
-				fmt.Printf("short circuit nak %d-%d (%d)\n", seq+1, v.SequenceNumber()-1, v.SequenceNumber()-seq-1)
-				if _, err := r.WriteToUDP(
-					srt.NewNakRangeControlPacket(session.socketId, seq+1, v.SequenceNumber()-1).Marshal(),
-					senderAddr,
-				); err != nil {
-					fmt.Printf("error writing short nak\n")
+			if v.SequenceNumber() > seq {
+				if v.SequenceNumber() > seq+1 {
+					// emit nak immediately, localhost -> localhost is usually reliably ordered
+					// and if it's not it's cheap to send so whatever.
+					fmt.Printf("short circuit nak %d-%d (%d)\n", seq+1, v.SequenceNumber()-1, v.SequenceNumber()-seq-1)
+					if _, err := r.WriteToUDP(
+						srt.NewNakRangeControlPacket(session.socketId, seq+1, v.SequenceNumber()-1).Marshal(),
+						senderAddr,
+					); err != nil {
+						fmt.Printf("error writing short nak\n")
+					}
 				}
-			} else if v.SequenceNumber() > seq {
 				// might be an out of order retransmission.
 				seq = v.SequenceNumber()
 			}
