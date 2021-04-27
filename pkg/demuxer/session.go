@@ -118,7 +118,9 @@ func (s *Session) Connections() []*net.UDPConn {
 	s.RLock()
 	result := make([]*net.UDPConn, 0, len(s.connections))
 	for _, conn := range s.connections {
-		result = append(result, conn.conn)
+		if !conn.deleted {
+			result = append(result, conn.conn)
+		}
 	}
 	s.RUnlock()
 	return result
@@ -127,11 +129,16 @@ func (s *Session) Connections() []*net.UDPConn {
 func (s *Session) ChooseConnection() *net.UDPConn {
 	totalWeights := 0
 	for _, conn := range s.connections {
-		totalWeights += int(conn.weight)
+		if !conn.deleted {
+			totalWeights += int(conn.weight)
+		}
 	}
 	choice := rand.Intn(totalWeights)
 	cumulative := 0
 	for _, conn := range s.connections {
+		if conn.deleted {
+			continue
+		}
 		cumulative += int(conn.weight)
 		if cumulative > choice {
 			return conn.conn
