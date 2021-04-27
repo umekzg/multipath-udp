@@ -97,7 +97,9 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 								for i := from; i < to; i++ {
 									pkt := session.buffer.Get(i)
 									if pkt == nil {
-										fmt.Printf("failed to fulfill nak %d, packet didn't exist\n", i)
+										if severity == 0 {
+											fmt.Printf("failed to fulfill nak %d in time, packet didn't exist\n", i)
+										}
 										if _, err := r.WriteToUDP(
 											srt.NewNakSingleControlPacket(session.socketId, i).Marshal(),
 											senderAddr,
