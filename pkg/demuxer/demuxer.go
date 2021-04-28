@@ -35,7 +35,6 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 		panic(err)
 	}
 	r.SetReadBuffer(64 * 1024 * 1024)
-	seq := uint32(0)
 
 	sessions := make(map[string]*Session)
 
@@ -142,20 +141,20 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 		case *srt.DataPacket:
 			conn := session.ChooseConnection()
 			addr := conn.LocalAddr().(*net.UDPAddr)
-			if v.SequenceNumber() > seq {
-				if seq > 0 && v.SequenceNumber() > seq+1 {
+			if v.SequenceNumber() > session.seq {
+				if session.seq > 0 && v.SequenceNumber() > session.seq+1 {
 					// emit nak immediately, localhost -> localhost is usually reliably ordered
 					// and if it's not it's cheap to send so whatever.
-					fmt.Printf("short circuit nak %d-%d (%d)\n", seq+1, v.SequenceNumber()-1, v.SequenceNumber()-seq-1)
+					fmt.Printf("short circuit nak %d-%d (%d)\n", session.seq+1, v.SequenceNumber()-1, v.SequenceNumber()-seq-1)
 					if _, err := r.WriteToUDP(
-						srt.NewNakRangeControlPacket(session.socketId, seq+1, v.SequenceNumber()-1).Marshal(),
+						srt.NewNakRangeControlPacket(session.socketId, session.seq+1, v.SequenceNumber()-1).Marshal(),
 						senderAddr,
 					); err != nil {
 						fmt.Printf("error writing short nak\n")
 					}
 				}
 				// might be an out of order retransmission.
-				seq = v.SequenceNumber()
+				session.seq = v.SequenceNumber()
 			}
 			session.buffer.Add(addr, v)
 			if _, err = conn.Write(buf[:n]); err != nil {

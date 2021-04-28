@@ -18,10 +18,9 @@ type Message struct {
 
 type Connection struct {
 	sync.RWMutex
-	key     string
-	conn    *net.UDPConn
-	weight  uint32
-	deleted bool
+	key    string
+	conn   *net.UDPConn
+	weight uint32
 }
 
 type Session struct {
@@ -32,6 +31,7 @@ type Session struct {
 	buffer     *buffer.SenderBuffer
 	responseCh chan *Message
 	socketId   uint32
+	seq        uint32
 }
 
 func NewSession(raddr *net.UDPAddr, responseCh chan *Message) *Session {
@@ -53,6 +53,12 @@ func getUDPAddrKey(addr *net.UDPAddr) string {
 
 func (s *Session) Add(addr *net.UDPAddr) error {
 	fmt.Printf("adding interface %v\n", addr)
+	key := getUDPAddrKey(addr)
+	for _, conn := range s.connections {
+		if conn.key == key {
+			return fmt.Errorf("interface already exists")
+		}
+	}
 	d := &net.Dialer{LocalAddr: addr}
 	c, err := d.Dial("udp", s.raddr.String())
 	if err != nil {
@@ -70,18 +76,14 @@ func (s *Session) Add(addr *net.UDPAddr) error {
 		}
 	}()
 	conn := &Connection{
-		key:     getUDPAddrKey(addr),
-		conn:    w,
-		deleted: false,
-		weight:  60,
+		key:    key,
+		conn:   w,
+		weight: 60,
 	}
 	go func() {
 		for {
 			time.Sleep(1 * time.Second)
 			conn.Lock()
-			if conn.deleted {
-				break
-			}
 			fmt.Printf("conn\t%v\tweight\t%d\n", conn.key, conn.weight)
 			if conn.weight < 60 {
 				conn.weight += 1
@@ -101,20 +103,19 @@ func (s *Session) Remove(addr *net.UDPAddr) error {
 	defer s.Unlock()
 	key := getUDPAddrKey(addr)
 	for i, conn := range s.connections {
-		if conn.key == key {
-			conn.Lock()
-			if err := conn.conn.Close(); err != nil {
-				return err
-			} else {
-				conn.deleted = true
-			}
-			conn.Unlock()
-			ret := make([]*Connection, len(s.connections)-1)
-			copy(ret[:i], s.connections[:i])
-			copy(ret[i:], s.connections[i+1:])
-			s.connections = ret
-			return nil
+		if conn.key != key {
+			continue
 		}
+		conn.Lock()
+		if err := conn.conn.Close(); err != nil {
+			return err
+		}
+		conn.Unlock()
+		ret := make([]*Connection, len(s.connections)-1)
+		copy(ret[:i], s.connections[:i])
+		copy(ret[i:], s.connections[i+1:])
+		s.connections = ret
+		return nil
 	}
 	return nil
 }
