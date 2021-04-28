@@ -118,6 +118,16 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 									}
 								}
 							}
+						case srt.ControlTypeShutdown:
+							fmt.Printf("------------------\n")
+							fmt.Printf("SHUTDOWN ATTEMPT\n")
+							fmt.Printf("------------------\n")
+							delete(sessions, saddr)
+							session.Close()
+							if n, err := r.WriteToUDP(p.Marshal(), senderAddr); err != nil || n != len(p.Marshal()) {
+								fmt.Printf("error writing response %v\n", err)
+								continue PACKET
+							}
 						case srt.ControlTypeHandshake:
 							fmt.Printf("handshake %d <- %d\n", v.DestinationSocketId(), v.HandshakeSocketId())
 							fallthrough
