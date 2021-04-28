@@ -166,6 +166,10 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 			case srt.ControlTypeHandshake:
 				session.socketId = v.HandshakeSocketId()
 				fmt.Printf("handshake %d -> %d\n", v.HandshakeSocketId(), v.DestinationSocketId())
+			case srt.ControlTypeShutdown:
+				fmt.Printf("------------------\n")
+				fmt.Printf("SHUTDOWN ATTEMPT\n")
+				fmt.Printf("------------------\n")
 			}
 			for _, conn := range session.Connections() {
 				if _, err = conn.Write(buf[:n]); err != nil {
