@@ -91,9 +91,8 @@ func (r *ReceiverBuffer) runEventLoop() {
 					}
 					if r.tail != start {
 						// write a nak.
-						if r.index > 0 {
-							r.MissingCh <- srt.NewMultipathNackControlPacket(r.index, start, r.tail)
-						} else {
+						r.MissingCh <- srt.NewMultipathNackControlPacket(r.index, start, r.tail)
+						if r.index == 0 {
 							fmt.Printf("missing packets %d - %d (%d)\n", start, r.tail, r.tail-start)
 						}
 					}

@@ -52,6 +52,7 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 		}
 
 		saddr := senderAddr.String()
+
 		session, found := sessions[saddr]
 		if !found {
 			respCh := make(chan *Message, 128)
