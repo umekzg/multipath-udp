@@ -145,7 +145,7 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 				if session.seq > 0 && v.SequenceNumber() > session.seq+1 {
 					// emit nak immediately, localhost -> localhost is usually reliably ordered
 					// and if it's not it's cheap to send so whatever.
-					fmt.Printf("short circuit nak %d-%d (%d)\n", session.seq+1, v.SequenceNumber()-1, v.SequenceNumber()-seq-1)
+					fmt.Printf("short circuit nak %d-%d (%d)\n", session.seq+1, v.SequenceNumber()-1, v.SequenceNumber()-session.seq-1)
 					if _, err := r.WriteToUDP(
 						srt.NewNakRangeControlPacket(session.socketId, session.seq+1, v.SequenceNumber()-1).Marshal(),
 						senderAddr,
