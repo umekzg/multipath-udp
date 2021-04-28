@@ -170,6 +170,8 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 				fmt.Printf("------------------\n")
 				fmt.Printf("SHUTDOWN ATTEMPT\n")
 				fmt.Printf("------------------\n")
+				delete(sessions, saddr)
+				session.Close()
 			}
 			for _, conn := range session.Connections() {
 				if _, err = conn.Write(buf[:n]); err != nil {

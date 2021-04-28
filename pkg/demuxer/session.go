@@ -84,6 +84,9 @@ func (s *Session) Add(addr *net.UDPAddr) error {
 		for {
 			time.Sleep(1 * time.Second)
 			conn.Lock()
+			if conn.weight == 0 {
+				break
+			}
 			fmt.Printf("conn\t%v\tweight\t%d\n", conn.key, conn.weight)
 			if conn.weight < 60 {
 				conn.weight += 1
@@ -110,6 +113,7 @@ func (s *Session) Remove(addr *net.UDPAddr) error {
 		if err := conn.conn.Close(); err != nil {
 			return err
 		}
+		conn.weight = 0
 		conn.Unlock()
 		ret := make([]*Connection, len(s.connections)-1)
 		copy(ret[:i], s.connections[:i])
@@ -165,7 +169,12 @@ func (s *Session) Deduct(senderAddr *net.UDPAddr) {
 }
 
 func (s *Session) Close() {
+	s.Lock()
 	for _, conn := range s.connections {
+		conn.Lock()
 		conn.conn.Close()
+		conn.weight = 0
+		conn.Unlock()
 	}
+	s.Unlock()
 }
