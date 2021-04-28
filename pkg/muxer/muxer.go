@@ -68,6 +68,7 @@ func (m *Muxer) readLoop(listen, dial *net.UDPAddr) {
 				session, ok := sessions[socketId]
 				sessionsLock.RUnlock()
 				if !ok {
+					fmt.Printf("new session %d from %v\n", socketId, senderAddr)
 					session, err = NewSession(dial)
 					if err != nil {
 						fmt.Printf("failed to create session %v\n", err)
@@ -91,6 +92,7 @@ func (m *Muxer) readLoop(listen, dial *net.UDPAddr) {
 							case *srt.ControlPacket:
 								if z.ControlType() == srt.ControlTypeHandshake {
 									sessionsLock.Lock()
+									fmt.Printf("binding session %d\n", z.HandshakeSocketId())
 									sessions[z.HandshakeSocketId()] = session
 									sessionsLock.Unlock()
 								}

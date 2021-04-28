@@ -37,7 +37,10 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 	r.SetReadBuffer(64 * 1024 * 1024)
 
 	sessions := make(map[string]*Session)
+	container := interfaces.NewContainer(dial)
+	d.interfaceBinder.Bind(container.Add, container.Remove, dial)
 
+REQUEST:
 	for {
 		var buf [1500]byte
 		n, senderAddr, err := r.ReadFromUDP(buf[0:])
@@ -55,27 +58,28 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 
 		session, found := sessions[saddr]
 		if !found {
-			respCh := make(chan *Message, 128)
-			session = NewSession(dial, respCh)
-			close := d.interfaceBinder.Bind(session.Add, session.Remove, dial)
-			defer close()
-			defer session.Close()
-
+			switch v := p.(type) {
+			case *srt.ControlPacket:
+				if v.ControlType() != srt.ControlTypeHandshake {
+					fmt.Printf("non-handshake packet sent first, sending shutdown.")
+					continue REQUEST
+				}
+			case *srt.DataPacket:
+				fmt.Printf("non-handshake packet sent first, sending shutdown.")
+				continue REQUEST
+			}
+			respCh := make(chan srt.Packet, 16)
+			session = NewSession(container, p.(*srt.ControlPacket).HandshakeSocketId(), respCh)
 			sessions[saddr] = session
 
 			go func() {
 				nakTimestamps := make(map[uint32]bool)
-			PACKET:
+			RESPONSE:
 				for {
-					resp, ok := <-respCh
+					p, ok := <-respCh
 					if !ok {
 						fmt.Printf("response ch closed\n")
 						break
-					}
-					p, err := srt.Unmarshal(resp.msg)
-					if err != nil {
-						fmt.Printf("invalid srt packet %v\n", err)
-						continue
 					}
 					switch v := p.(type) {
 					case *srt.ControlPacket:
@@ -86,7 +90,7 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 								timestamp := v.Timestamp()
 								if nakTimestamps[timestamp] {
 									// already processed
-									continue PACKET
+									continue RESPONSE
 								}
 								nakTimestamps[timestamp] = true
 								severity := v.TypeSpecificInformation()
@@ -100,7 +104,7 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 											fmt.Printf("failed to fulfill nak %d in time, packet didn't exist\n", i)
 										}
 										if _, err := r.WriteToUDP(
-											srt.NewNakSingleControlPacket(session.socketId, i).Marshal(),
+											srt.NewNakSingleControlPacket(session.sourceSocketId, i).Marshal(),
 											senderAddr,
 										); err != nil {
 											fmt.Printf("error writing short nak\n")
@@ -111,8 +115,8 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 										continue
 									}
 									// find out who this packet belonged to, dock a point from them.
-									session.Deduct(pkt.Sender)
-									for _, conn := range session.Connections() {
+									session.container.Deduct(pkt.Sender)
+									for _, conn := range session.container.UDPConns() {
 										if _, err = conn.Write(pkt.Data.Marshal()); err != nil {
 											fmt.Printf("error writing pkt %v\n", err)
 										}
@@ -127,7 +131,7 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 							session.Close()
 							if n, err := r.WriteToUDP(p.Marshal(), senderAddr); err != nil || n != len(p.Marshal()) {
 								fmt.Printf("error writing response %v\n", err)
-								continue PACKET
+								continue RESPONSE
 							}
 						case srt.ControlTypeHandshake:
 							fmt.Printf("handshake %d <- %d\n", v.DestinationSocketId(), v.HandshakeSocketId())
@@ -135,13 +139,13 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 						default:
 							if n, err := r.WriteToUDP(p.Marshal(), senderAddr); err != nil || n != len(p.Marshal()) {
 								fmt.Printf("error writing response %v\n", err)
-								continue PACKET
+								continue RESPONSE
 							}
 						}
 					case *srt.DataPacket:
 						if _, err = r.WriteToUDP(p.Marshal(), senderAddr); err != nil {
 							fmt.Printf("error writing response %v\n", err)
-							continue PACKET
+							continue RESPONSE
 						}
 					}
 				}
@@ -150,7 +154,7 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 
 		switch v := p.(type) {
 		case *srt.DataPacket:
-			conn := session.ChooseConnection()
+			conn := session.container.ChooseUDPConn()
 			addr := conn.LocalAddr().(*net.UDPAddr)
 			if v.SequenceNumber() > session.seq {
 				if session.seq > 0 && v.SequenceNumber() > session.seq+1 {
@@ -158,7 +162,7 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 					// and if it's not it's cheap to send so whatever.
 					fmt.Printf("short circuit nak %d-%d (%d)\n", session.seq+1, v.SequenceNumber()-1, v.SequenceNumber()-session.seq-1)
 					if _, err := r.WriteToUDP(
-						srt.NewNakRangeControlPacket(session.socketId, session.seq+1, v.SequenceNumber()-1).Marshal(),
+						srt.NewNakRangeControlPacket(session.sourceSocketId, session.seq+1, v.SequenceNumber()-1).Marshal(),
 						senderAddr,
 					); err != nil {
 						fmt.Printf("error writing short nak\n")
@@ -170,12 +174,12 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 			session.buffer.Add(addr, v)
 			if _, err = conn.Write(buf[:n]); err != nil {
 				fmt.Printf("error writing pkt %v\n", err)
-				session.Deduct(conn.LocalAddr().(*net.UDPAddr))
+				session.container.Deduct(conn.LocalAddr().(*net.UDPAddr))
 			}
 		case *srt.ControlPacket:
 			switch v.ControlType() {
 			case srt.ControlTypeHandshake:
-				session.socketId = v.HandshakeSocketId()
+				session.sourceSocketId = v.HandshakeSocketId()
 				fmt.Printf("handshake %d -> %d\n", v.HandshakeSocketId(), v.DestinationSocketId())
 			case srt.ControlTypeShutdown:
 				fmt.Printf("------------------\n")
@@ -184,10 +188,10 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 				delete(sessions, saddr)
 				session.Close()
 			}
-			for _, conn := range session.Connections() {
+			for _, conn := range session.container.UDPConns() {
 				if _, err = conn.Write(buf[:n]); err != nil {
 					fmt.Printf("error writing pkt %v\n", err)
-					session.Deduct(conn.LocalAddr().(*net.UDPAddr))
+					session.container.Deduct(conn.LocalAddr().(*net.UDPAddr))
 				}
 			}
 		}
