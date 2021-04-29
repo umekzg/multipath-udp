@@ -54,6 +54,8 @@ REQUEST:
 			continue
 		}
 
+		// blindly send this packet across.
+
 		saddr := senderAddr.String()
 
 		session, found := sessions[saddr]
@@ -123,16 +125,6 @@ REQUEST:
 									}
 								}
 							}
-						case srt.ControlTypeShutdown:
-							fmt.Printf("------------------\n")
-							fmt.Printf("SHUTDOWN ATTEMPT\n")
-							fmt.Printf("------------------\n")
-							delete(sessions, saddr)
-							session.Close()
-							if n, err := r.WriteToUDP(p.Marshal(), senderAddr); err != nil || n != len(p.Marshal()) {
-								fmt.Printf("error writing response %v\n", err)
-								continue RESPONSE
-							}
 						case srt.ControlTypeHandshake:
 							fmt.Printf("handshake %d <- %d\n", v.DestinationSocketId(), v.HandshakeSocketId())
 							fallthrough
@@ -181,13 +173,6 @@ REQUEST:
 			case srt.ControlTypeHandshake:
 				session.sourceSocketId = v.HandshakeSocketId()
 				fmt.Printf("handshake %d -> %d\n", v.HandshakeSocketId(), v.DestinationSocketId())
-			case srt.ControlTypeShutdown:
-				fmt.Printf("------------------\n")
-				fmt.Printf("SHUTDOWN ATTEMPT\n")
-				fmt.Printf("------------------\n")
-				delete(sessions, saddr)
-				session.Close()
-			}
 			for _, conn := range session.container.UDPConns() {
 				if _, err = conn.Write(buf[:n]); err != nil {
 					fmt.Printf("error writing pkt %v\n", err)
