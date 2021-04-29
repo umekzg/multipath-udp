@@ -12,6 +12,6 @@ import (
 func AutoBindInterfaces() func(*Demuxer) {
 	return func(d *Demuxer) {
 		d.interfaceBinder = interfaces.NewAutoBinder(
-			net.Interfaces, 3*time.Second)
+			interfaces.USBInterfaces(net.Interfaces), 3*time.Second)
 	}
 }
