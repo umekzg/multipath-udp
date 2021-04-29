@@ -173,6 +173,7 @@ REQUEST:
 			case srt.ControlTypeHandshake:
 				session.sourceSocketId = v.HandshakeSocketId()
 				fmt.Printf("handshake %d -> %d\n", v.HandshakeSocketId(), v.DestinationSocketId())
+			}
 			for _, conn := range session.container.UDPConns() {
 				if _, err = conn.Write(buf[:n]); err != nil {
 					fmt.Printf("error writing pkt %v\n", err)
