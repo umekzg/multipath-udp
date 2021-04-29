@@ -62,7 +62,9 @@ func (m *Muxer) readLoop(listen, dial *net.UDPAddr) {
 			}
 			sessionsLock.RUnlock()
 		case *srt.ControlPacket:
-			if v.ControlType() == srt.ControlTypeHandshake {
+			if v.ControlType() == srt.ControlTypeUserDefined && v.Subtype() == srt.SubtypeMultipathKeepAlive {
+				break
+			} else if v.ControlType() == srt.ControlTypeHandshake {
 				socketId := v.HandshakeSocketId()
 				sessionsLock.RLock()
 				session, ok := sessions[socketId]

@@ -42,6 +42,9 @@ func NewContainer(raddr *net.UDPAddr) *Container {
 				if conn.weight < 1000 {
 					conn.weight += 1
 				}
+				if _, err := conn.conn.Write(srt.NewMultipathKeepAliveControlPacket().Marshal()); err != nil {
+					fmt.Printf("connection might have died... %v\n", err)
+				}
 				conn.Unlock()
 			}
 			if i%25 == 0 {
