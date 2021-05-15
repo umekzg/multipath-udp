@@ -1,7 +1,6 @@
 package interfaces
 
 import (
-	"encoding/hex"
 	"fmt"
 	"math/rand"
 	"net"
@@ -13,20 +12,23 @@ import (
 
 type Connection struct {
 	sync.RWMutex
-	key    string
-	conn   *net.UDPConn
+
+	conn *net.UDPConn
+	addr *net.UDPAddr
+
 	weight uint32
 }
 
 type Container struct {
 	sync.RWMutex
+	id          uint32
 	connections []*Connection
 	listeners   []chan srt.Packet
 	raddr       *net.UDPAddr
 }
 
 func NewContainer(raddr *net.UDPAddr) *Container {
-	c := &Container{connections: make([]*Connection, 0, 5), raddr: raddr}
+	c := &Container{id: rand.Uint32(), connections: make([]*Connection, 0, 5), raddr: raddr}
 	go func() {
 		for i := 0; ; i++ {
 			time.Sleep(100 * time.Millisecond)
@@ -37,7 +39,7 @@ func NewContainer(raddr *net.UDPAddr) *Container {
 			for _, conn := range c.connections {
 				conn.Lock()
 				if i%25 == 0 {
-					fmt.Printf("conn\t%v\tweight\t%d\n", conn.key, conn.weight)
+					fmt.Printf("conn\t%v\tweight\t%d\n", conn.addr, conn.weight)
 				}
 				if conn.weight < 1000 {
 					conn.weight += 1
@@ -56,54 +58,90 @@ func NewContainer(raddr *net.UDPAddr) *Container {
 	return c
 }
 
-func getUDPAddrKey(addr *net.UDPAddr) string {
-	// handle nil addr differently because it's valid to pass to DialUDP.
-	if addr == nil {
-		return ""
-	}
-	return hex.EncodeToString(addr.IP)
-}
-
 func (s *Container) Add(addr *net.UDPAddr) error {
 	fmt.Printf("adding interface %v\n", addr)
-	key := getUDPAddrKey(addr)
-	for _, conn := range s.connections {
-		if conn.key == key {
-			return fmt.Errorf("interface already exists")
-		}
-	}
 	d := &net.Dialer{LocalAddr: addr}
 	c, err := d.Dial("udp", s.raddr.String())
 	if err != nil {
 		return err
 	}
 	w := c.(*net.UDPConn)
+	recv := make(chan srt.Packet)
+	conn := &Connection{
+		conn:   w,
+		addr:   addr,
+		weight: 1000,
+	}
 	go func() {
 		for {
 			var msg [1500]byte
 			n, err := w.Read(msg[0:])
 			if err != nil {
+				close(recv)
 				break
 			}
 			pkt, err := srt.Unmarshal(msg[:n])
 			if err != nil {
 				continue
 			}
-			s.RLock()
-			for _, ch := range s.listeners {
-				ch <- pkt
-			}
-			s.RUnlock()
+			recv <- pkt
 		}
 	}()
-	conn := &Connection{
-		key:    key,
-		conn:   w,
-		weight: 1000,
-	}
-	s.Lock()
-	s.connections = append(s.connections, conn)
-	s.Unlock()
+	go func() {
+		handshaken := false
+		handshake := srt.NewMultipathHandshakeControlPacket(s.id)
+		keepalive := srt.NewMultipathKeepAliveControlPacket()
+	READ:
+		for {
+			select {
+			case msg, ok := <-recv:
+				if !ok {
+					for _, listener := range s.listeners {
+						close(listener)
+					}
+					break
+				}
+				switch ctrl := msg.(type) {
+				case *srt.ControlPacket:
+					switch ctrl.ControlType() {
+					case srt.ControlTypeUserDefined:
+						switch ctrl.Subtype() {
+						case srt.SubtypeMultipathHandshake:
+							if ctrl.TypeSpecificInformation() != s.id {
+								fmt.Printf("invalid handshake response, expected %d got %d\n", s.id, ctrl.TypeSpecificInformation())
+							} else if !handshaken {
+								// mark the connection as active.
+								handshaken = true
+								s.Lock()
+								s.connections = append(s.connections, conn)
+								s.Unlock()
+							}
+							continue READ
+						case srt.SubtypeMultipathKeepAlive:
+							// ignore this packet.
+							continue READ
+						}
+					}
+
+				}
+				for _, listener := range s.listeners {
+					listener <- msg
+				}
+			case <-time.After(250 * time.Millisecond):
+				if handshaken {
+					// send keepalive
+					if _, err := w.Write(keepalive.Marshal()); err != nil {
+						fmt.Printf("failed to send keepalive\n")
+					}
+				} else {
+					// send handshake
+					if _, err := w.Write(handshake.Marshal()); err != nil {
+						fmt.Printf("failed to send handshake\n")
+					}
+				}
+			}
+		}
+	}()
 	return nil
 }
 
@@ -111,9 +149,8 @@ func (s *Container) Remove(addr *net.UDPAddr) error {
 	fmt.Printf("removing interface %v\n", addr)
 	s.Lock()
 	defer s.Unlock()
-	key := getUDPAddrKey(addr)
 	for i, conn := range s.connections {
-		if conn.key != key {
+		if conn.addr.String() != addr.String() {
 			continue
 		}
 		conn.Lock()
@@ -167,6 +204,9 @@ func (s *Container) ChooseUDPConn() *net.UDPConn {
 	totalWeights := 0
 	for _, conn := range s.connections {
 		totalWeights += int(conn.weight)
+	}
+	if totalWeights == 0 {
+		return nil
 	}
 	choice := rand.Intn(totalWeights)
 	cumulative := 0

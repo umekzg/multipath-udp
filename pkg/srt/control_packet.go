@@ -31,6 +31,7 @@ const (
 	SubtypeMultipathAck       Subtype = 0x0002
 	SubtypeMultipathNak       Subtype = 0x0003
 	SubtypeMultipathKeepAlive Subtype = 0x0004
+	SubtypeMultipathHandshake Subtype = 0x0005
 )
 
 type ControlPacket struct {
@@ -114,9 +115,18 @@ func NewMultipathNackControlPacket(severity, from, to uint32) *ControlPacket {
 }
 
 func NewMultipathKeepAliveControlPacket() *ControlPacket {
-	pkt := make([]byte, 12)
+	pkt := make([]byte, 16)
 	binary.BigEndian.PutUint16(pkt[0:2], uint16(PacketTypeControlPacket)|uint16(ControlTypeUserDefined))
 	binary.BigEndian.PutUint16(pkt[2:4], uint16(SubtypeMultipathNak))
+	binary.BigEndian.PutUint32(pkt[8:12], uint32(time.Now().UnixNano()/1000))
+	return &ControlPacket{RawPacket: pkt}
+}
+
+func NewMultipathHandshakeControlPacket(id uint32) *ControlPacket {
+	pkt := make([]byte, 16)
+	binary.BigEndian.PutUint16(pkt[0:2], uint16(PacketTypeControlPacket)|uint16(ControlTypeUserDefined))
+	binary.BigEndian.PutUint16(pkt[2:4], uint16(SubtypeMultipathHandshake))
+	binary.BigEndian.PutUint32(pkt[4:8], id)
 	binary.BigEndian.PutUint32(pkt[8:12], uint32(time.Now().UnixNano()/1000))
 	return &ControlPacket{RawPacket: pkt}
 }

@@ -3,7 +3,6 @@ package muxer
 import (
 	"fmt"
 	"net"
-	"sync"
 
 	"github.com/muxfd/multipath-udp/pkg/srt"
 )
@@ -33,17 +32,19 @@ func (m *Muxer) readLoop(listen, dial *net.UDPAddr) {
 	}
 	r.SetReadBuffer(64 * 1024 * 1024)
 
-	var sessionsLock sync.RWMutex
+	var msg [1500]byte
 	sessions := make(map[uint32]*Session)
-	// measure bitrate in 2-second blocks.
+	connections := make(map[string]uint32)
 
+READ:
 	for {
-		msg := make([]byte, 2048)
-		n, senderAddr, err := r.ReadFromUDP(msg)
+		n, senderAddr, err := r.ReadFromUDP(msg[:])
 		if err != nil {
 			fmt.Printf("error reading %v\n", err)
 			break
 		}
+
+		saddr := senderAddr.String()
 
 		p, err := srt.Unmarshal(msg[:n])
 		if err != nil {
@@ -51,111 +52,68 @@ func (m *Muxer) readLoop(listen, dial *net.UDPAddr) {
 			continue
 		}
 		switch v := p.(type) {
-		case *srt.DataPacket:
-			socketId := v.DestinationSocketId()
-			sessionsLock.RLock()
-			if session, ok := sessions[socketId]; ok {
-				session.AddSender(senderAddr)
-				session.buffer.Add(v)
-			} else {
-				fmt.Printf("data packet received before handshake for socket id %d\n", socketId)
-			}
-			sessionsLock.RUnlock()
 		case *srt.ControlPacket:
-			if v.ControlType() == srt.ControlTypeUserDefined && v.Subtype() == srt.SubtypeMultipathKeepAlive {
-				break
-			} else if v.ControlType() == srt.ControlTypeHandshake {
-				socketId := v.HandshakeSocketId()
-				sessionsLock.RLock()
-				session, ok := sessions[socketId]
-				sessionsLock.RUnlock()
-				if !ok {
-					fmt.Printf("new session %d from %v\n", socketId, senderAddr)
-					session, err = NewSession(dial)
-					if err != nil {
-						fmt.Printf("failed to create session %v\n", err)
-						break
-					}
-
-					go func() {
-						var buf [1500]byte
-						for {
-							n, err := session.SRTConn.Read(buf[0:])
-							if err != nil {
-								fmt.Printf("srt conn closed %v\n", err)
-								break
-							}
-							q, err := srt.Unmarshal(buf[:n])
-							if err != nil {
-								fmt.Printf("not an srt packet")
-								break
-							}
-							switch z := q.(type) {
-							case *srt.ControlPacket:
-								if z.ControlType() == srt.ControlTypeHandshake {
-									sessionsLock.Lock()
-									fmt.Printf("binding session %d\n", z.HandshakeSocketId())
-									sessions[z.HandshakeSocketId()] = session
-									sessionsLock.Unlock()
-								}
-							}
-							for _, senderAddr := range session.sources {
-								if m, err := r.WriteToUDP(buf[:n], senderAddr); err != nil || n != m {
-									fmt.Printf("error writing response %v\n", err)
+			switch v.ControlType() {
+			case srt.ControlTypeUserDefined:
+				switch v.Subtype() {
+				case srt.SubtypeMultipathHandshake:
+					// add it to the corresponding connection group and respond with a handshake.
+					id := v.TypeSpecificInformation()
+					session, ok := sessions[id]
+					if !ok {
+						session, err := NewSession(dial)
+						if err != nil {
+							fmt.Printf("error creating new session %v\n", err)
+							continue READ
+						}
+						sessions[id] = session
+						go func() {
+							var msg [1500]byte
+							for {
+								n, err := session.SRTConn.Read(msg[:])
+								if err != nil {
+									fmt.Printf("error reading %v\n", err)
 									break
 								}
-							}
-						}
-					}()
 
-					go func() {
-						for {
-							msg, ok := <-session.buffer.EmitCh
-							if !ok {
-								fmt.Printf("emit ch closed")
-								break
-							}
-							if n, err := session.SRTConn.Write(msg.Marshal()); err != nil || n != len(msg.Marshal()) {
-								fmt.Printf("error writing to srt %v\n", err)
-							}
-						}
-					}()
-
-					go func() {
-						for {
-							msg, ok := <-session.buffer.MissingCh
-							if !ok {
-								fmt.Printf("missing ch closed")
-								break
-							}
-							for _, senderAddr := range session.sources {
-								if _, err := r.WriteToUDP(msg.Marshal(), senderAddr); err != nil {
-									fmt.Printf("error writing response %v\n", err)
-									break
+								for _, sender := range session.GetSenders() {
+									if _, err := r.WriteToUDP(msg[:n], sender); err != nil {
+										fmt.Printf("error writing response %v\n", err)
+										session.RemoveSender(sender)
+									}
 								}
 							}
-						}
-					}()
-				}
-				session.AddSender(senderAddr)
-				if n, err := session.SRTConn.Write(v.Marshal()); err != nil || n != len(v.Marshal()) {
-					fmt.Printf("error writing to srt %v\n", err)
-				}
-			} else {
-				socketId := v.DestinationSocketId()
-				sessionsLock.RLock()
-				if session, ok := sessions[socketId]; ok {
-					session.AddSender(senderAddr)
-					if n, err := session.SRTConn.Write(v.Marshal()); err != nil || n != len(v.Marshal()) {
-						fmt.Printf("error writing to srt %v\n", err)
+						}()
+						session.AddSender(senderAddr)
+						connections[saddr] = id
+					} else {
+						session.AddSender(senderAddr)
+						connections[saddr] = id
 					}
-				} else {
-					fmt.Printf("control packet received before handshake for socket id %d\n", socketId)
+					if _, err := r.WriteToUDP(srt.NewMultipathHandshakeControlPacket(id).Marshal(), senderAddr); err != nil {
+						fmt.Printf("failed to write handshake response %v\n", err)
+					}
+					continue READ
+				case srt.SubtypeMultipathKeepAlive:
+					// ignore the packet.
+					continue READ
 				}
-				sessionsLock.RUnlock()
 			}
 		}
 
+		id, ok := connections[saddr]
+		if !ok {
+			fmt.Printf("connection not found, probably missing handshake!\n")
+			continue
+		}
+		session, ok := sessions[id]
+		if !ok {
+			fmt.Printf("connection not found, probably missing handshake!\n")
+			continue
+		}
+		if _, err := session.SRTConn.Write(p.Marshal()); err != nil {
+			fmt.Printf("error forwarding packet to srt %v\n", err)
+		}
 	}
 }
 
