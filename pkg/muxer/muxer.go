@@ -3,6 +3,7 @@ package muxer
 import (
 	"fmt"
 	"net"
+	"sync"
 
 	"github.com/muxfd/multipath-udp/pkg/srt"
 )
@@ -32,9 +33,51 @@ func (m *Muxer) readLoop(listen, dial *net.UDPAddr) {
 	}
 	r.SetReadBuffer(64 * 1024 * 1024)
 
+	w, err := net.DialUDP("udp", nil, dial)
+	if err != nil {
+		panic(err)
+	}
+
 	var msg [1500]byte
-	sessions := make(map[uint32]*Session)
-	connections := make(map[string]uint32)
+
+	var sourceLock sync.RWMutex
+	sources := make(map[uint32]uint32)                  // map from socket id -> connection group
+	connectionGroups := make(map[uint32][]*net.UDPAddr) // map from connection group to addresses.
+
+	go func() {
+		var p [1500]byte
+		for {
+			n, err := w.Read(p[:])
+			if err != nil {
+				fmt.Printf("error reading from destination socket %v\n", err)
+				break
+			}
+			msg, err := srt.Unmarshal(p[:n])
+			if err != nil {
+				fmt.Printf("not an srt packet %v\n", err)
+				continue
+			}
+			// get the destination socket id for the msg.
+			sourceLock.RLock()
+			connectionGroup, ok := sources[msg.DestinationSocketId()]
+			if !ok {
+				fmt.Printf("source socket id does not exist\n")
+				continue
+			}
+			sourceLock.RUnlock()
+			// broadcast the message to the entire connection group.
+			sources, ok := connectionGroups[connectionGroup]
+			if !ok {
+				fmt.Printf("connection group does not exist\n")
+				continue
+			}
+			for _, source := range sources {
+				if _, err := r.WriteToUDP(msg.Marshal(), source); err != nil {
+					fmt.Printf("error writing to source %v\n", source)
+				}
+			}
+		}
+	}()
 
 READ:
 	for {
@@ -54,6 +97,18 @@ READ:
 		switch v := p.(type) {
 		case *srt.ControlPacket:
 			switch v.ControlType() {
+			case srt.ControlTypeHandshake:
+				// get the connection group for this socket.
+				connectionGroup, ok := connectionGroupAssignments[saddr]
+				if !ok {
+					fmt.Printf("message received from unknown connection group")
+					continue READ
+				}
+				fmt.Printf("binding %d to connection group %d\n", v.HandshakeSocketId(), connectionGroup)
+				sourceLock.Lock()
+				sources[v.HandshakeSocketId()] = connectionGroup
+				sourceLock.Unlock()
+				continue READ
 			case srt.ControlTypeUserDefined:
 				switch v.Subtype() {
 				case srt.SubtypeMultipathHandshake:

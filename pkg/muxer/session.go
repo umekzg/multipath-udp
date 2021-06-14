@@ -13,11 +13,6 @@ type Session struct {
 }
 
 func NewSession(dial *net.UDPAddr) (*Session, error) {
-	conn, err := net.DialUDP("udp", nil, dial)
-	if err != nil {
-		return nil, err
-	}
-
 	return &Session{
 		SRTConn: conn,
 		sources: make([]*net.UDPAddr, 0, 5),
