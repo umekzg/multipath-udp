@@ -3,6 +3,7 @@ package demuxer
 import (
 	"fmt"
 	"net"
+	"sync"
 
 	"github.com/muxfd/multipath-udp/pkg/interfaces"
 	"github.com/muxfd/multipath-udp/pkg/srt"
@@ -35,7 +36,35 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 	}
 	r.SetReadBuffer(64 * 1024 * 1024)
 
-	containers := make(map[string]*interfaces.Container)
+	container := interfaces.NewContainer(dial)
+	d.interfaceBinder.Bind(container.Add, container.Remove, dial)
+
+	responseCh := make(chan srt.Packet, 16)
+	container.Listen(responseCh)
+
+	var sourceLock sync.RWMutex
+	sources := make(map[uint32]*net.UDPAddr)
+
+	go func() {
+		for {
+			msg, ok := <-responseCh
+			if !ok {
+				break
+			}
+			// get the destination socket id for the msg.
+			sourceLock.RLock()
+			source, ok := sources[msg.DestinationSocketId()]
+			sourceLock.RUnlock()
+			if !ok {
+				fmt.Printf("unknown response destination socket id %d\n", msg.DestinationSocketId())
+				continue
+			}
+			if _, err := r.WriteToUDP(msg.Marshal(), source); err != nil {
+				fmt.Printf("error writing to source %v\n", source)
+			}
+		}
+	}()
+
 	for {
 		var buf [1500]byte
 		n, senderAddr, err := r.ReadFromUDP(buf[0:])
@@ -49,25 +78,16 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 			continue
 		}
 
-		saddr := senderAddr.String()
-		container, found := containers[saddr]
-		if !found {
-			container = interfaces.NewContainer(dial)
-			d.interfaceBinder.Bind(container.Add, container.Remove, dial)
-			containers[saddr] = container
-			responseCh := make(chan srt.Packet, 16)
-			container.Listen(responseCh)
-			go func() {
-				for {
-					msg, ok := <-responseCh
-					if !ok {
-						break
-					}
-					if _, err := r.WriteToUDP(msg.Marshal(), senderAddr); err != nil {
-						fmt.Printf("error writing to source %v\n", senderAddr)
-					}
-				}
-			}()
+		switch v := p.(type) {
+		case *srt.ControlPacket:
+			switch v.ControlType() {
+			case srt.ControlTypeHandshake:
+				// note this sender addr's socket id.
+				sourceLock.Lock()
+				fmt.Printf("binding %d to addr %s\n", v.HandshakeSocketId(), senderAddr)
+				sources[v.HandshakeSocketId()] = senderAddr
+				sourceLock.Unlock()
+			}
 		}
 		conn := container.ChooseUDPConn()
 		if conn == nil {
