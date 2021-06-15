@@ -110,6 +110,7 @@ func (s *Container) Add(addr *net.UDPAddr) error {
 							if ctrl.TypeSpecificInformation() != s.id {
 								fmt.Printf("invalid handshake response, expected %d got %d\n", s.id, ctrl.TypeSpecificInformation())
 							} else if !handshaken {
+								fmt.Printf("handshake complete %s\n", addr)
 								// mark the connection as active.
 								handshaken = true
 								s.Lock()

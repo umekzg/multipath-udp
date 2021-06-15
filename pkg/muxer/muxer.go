@@ -43,6 +43,7 @@ func (m *Muxer) readLoop(listen, dial *net.UDPAddr) {
 	var sourceLock sync.RWMutex
 	sources := make(map[uint32]uint32)                  // map from socket id -> connection group
 	connectionGroups := make(map[uint32][]*net.UDPAddr) // map from connection group to addresses.
+	connectionGroupAssignments := make(map[string]uint32)
 
 	go func() {
 		var p [1500]byte
@@ -108,46 +109,24 @@ READ:
 				sourceLock.Lock()
 				sources[v.HandshakeSocketId()] = connectionGroup
 				sourceLock.Unlock()
-				continue READ
+				break
 			case srt.ControlTypeUserDefined:
 				switch v.Subtype() {
 				case srt.SubtypeMultipathHandshake:
-					// add it to the corresponding connection group and respond with a handshake.
 					id := v.TypeSpecificInformation()
-					session, ok := sessions[id]
-					if !ok {
-						session, err := NewSession(dial)
-						if err != nil {
-							fmt.Printf("error creating new session %v\n", err)
-							continue READ
+					// see if this socket has already been assigned.
+					if connectionGroup, ok := connectionGroupAssignments[saddr]; ok {
+						if connectionGroup != id {
+							fmt.Printf("mismatched connection group!\n")
 						}
-						sessions[id] = session
-						go func() {
-							var msg [1500]byte
-							for {
-								n, err := session.SRTConn.Read(msg[:])
-								if err != nil {
-									fmt.Printf("error reading %v\n", err)
-									break
-								}
-
-								for _, sender := range session.GetSenders() {
-									if _, err := r.WriteToUDP(msg[:n], sender); err != nil {
-										fmt.Printf("error writing response %v\n", err)
-										session.RemoveSender(sender)
-									}
-								}
-							}
-						}()
-						session.AddSender(senderAddr)
-						connections[saddr] = id
-					} else {
-						session.AddSender(senderAddr)
-						connections[saddr] = id
+						if _, err := r.WriteToUDP(srt.NewMultipathHandshakeControlPacket(id).Marshal(), senderAddr); err != nil {
+							fmt.Printf("failed to write handshake response %v\n", err)
+						}
+						continue READ
 					}
-					if _, err := r.WriteToUDP(srt.NewMultipathHandshakeControlPacket(id).Marshal(), senderAddr); err != nil {
-						fmt.Printf("failed to write handshake response %v\n", err)
-					}
+					// add it to the corresponding connection group and respond with a handshake.
+					connectionGroupAssignments[saddr] = id
+					connectionGroups[id] = append(connectionGroups[id], senderAddr)
 					continue READ
 				case srt.SubtypeMultipathKeepAlive:
 					// ignore the packet.
@@ -156,17 +135,7 @@ READ:
 			}
 		}
 
-		id, ok := connections[saddr]
-		if !ok {
-			fmt.Printf("connection not found, probably missing handshake!\n")
-			continue
-		}
-		session, ok := sessions[id]
-		if !ok {
-			fmt.Printf("connection not found, probably missing handshake!\n")
-			continue
-		}
-		if _, err := session.SRTConn.Write(p.Marshal()); err != nil {
+		if _, err := w.Write(p.Marshal()); err != nil {
 			fmt.Printf("error forwarding packet to srt %v\n", err)
 		}
 	}
