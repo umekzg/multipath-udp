@@ -96,9 +96,12 @@ func (s *Container) Add(addr *net.UDPAddr) error {
 			select {
 			case msg, ok := <-recv:
 				if !ok {
+					s.Lock()
 					for _, listener := range s.listeners {
 						close(listener)
 					}
+					s.listeners = []chan srt.Packet{}
+					s.Unlock()
 					break
 				}
 				switch ctrl := msg.(type) {
