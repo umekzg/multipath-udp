@@ -32,3 +32,7 @@ func (p DataPacket) Timestamp() uint32 {
 func (p DataPacket) DestinationSocketId() uint32 {
 	return binary.BigEndian.Uint32(p.RawPacket[12:16])
 }
+
+func (p DataPacket) IsRetransmitted() bool {
+	return (p.RawPacket[4] & 0b00001000) > 0
+}

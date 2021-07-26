@@ -72,6 +72,7 @@ func (m *Muxer) readLoop(listen, dial *net.UDPAddr) {
 				fmt.Printf("connection group does not exist\n")
 				continue
 			}
+			// blindly write to all udp sockets in connection group.
 			for _, source := range sources {
 				if _, err := r.WriteToUDP(msg.Marshal(), source); err != nil {
 					fmt.Printf("error writing to source %v\n", source)

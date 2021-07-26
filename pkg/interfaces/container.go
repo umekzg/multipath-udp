@@ -13,18 +13,21 @@ import (
 type Connection struct {
 	sync.RWMutex
 
-	conn *net.UDPConn
-	addr *net.UDPAddr
+	UDPConn *net.UDPConn
+	addr    *net.UDPAddr
 
 	weight uint32
 }
 
 type Container struct {
 	sync.RWMutex
-	id          uint32
+	id uint32
+
 	connections []*Connection
 	listeners   []chan srt.Packet
 	raddr       *net.UDPAddr
+
+	senders [1 << 16]*Connection
 }
 
 func NewContainer(raddr *net.UDPAddr) *Container {
@@ -44,7 +47,7 @@ func NewContainer(raddr *net.UDPAddr) *Container {
 				if conn.weight < 1000 {
 					conn.weight += 1
 				}
-				if _, err := conn.conn.Write(srt.NewMultipathKeepAliveControlPacket().Marshal()); err != nil {
+				if _, err := conn.UDPConn.Write(srt.NewMultipathKeepAliveControlPacket().Marshal()); err != nil {
 					fmt.Printf("connection might have died... %v\n", err)
 				}
 				conn.Unlock()
@@ -68,9 +71,9 @@ func (s *Container) Add(addr *net.UDPAddr) error {
 	w := c.(*net.UDPConn)
 	recv := make(chan srt.Packet)
 	conn := &Connection{
-		conn:   w,
-		addr:   addr,
-		weight: 1000,
+		UDPConn: w,
+		addr:    addr,
+		weight:  1000,
 	}
 	go func() {
 		for {
@@ -158,7 +161,7 @@ func (s *Container) Remove(addr *net.UDPAddr) error {
 			continue
 		}
 		conn.Lock()
-		if err := conn.conn.Close(); err != nil {
+		if err := conn.UDPConn.Close(); err != nil {
 			return err
 		}
 		conn.weight = 0
@@ -192,17 +195,13 @@ func (s *Container) Unlisten(ch chan srt.Packet) {
 	}
 }
 
-func (s *Container) UDPConns() []*net.UDPConn {
+func (s *Container) UDPConns() []*Connection {
 	s.RLock()
 	defer s.RUnlock()
-	result := make([]*net.UDPConn, 0, len(s.connections))
-	for _, conn := range s.connections {
-		result = append(result, conn.conn)
-	}
-	return result
+	return s.connections[:]
 }
 
-func (s *Container) ChooseUDPConn() *net.UDPConn {
+func (s *Container) ChooseConnection() *Connection {
 	s.RLock()
 	defer s.RUnlock()
 	totalWeights := 0
@@ -217,10 +216,10 @@ func (s *Container) ChooseUDPConn() *net.UDPConn {
 	for _, conn := range s.connections {
 		cumulative += int(conn.weight)
 		if cumulative > choice {
-			return conn.conn
+			return conn
 		}
 	}
-	return s.connections[len(s.connections)-1].conn
+	return s.connections[len(s.connections)-1]
 }
 
 func (s *Container) NumConnections() int {
@@ -229,17 +228,13 @@ func (s *Container) NumConnections() int {
 	return len(s.connections)
 }
 
-func (s *Container) Deduct(senderAddr *net.UDPAddr) {
-	s.Lock()
-	defer s.Unlock()
-	for _, conn := range s.connections {
-		if conn.conn.LocalAddr().(*net.UDPAddr).String() == senderAddr.String() {
-			conn.Lock()
-			if conn.weight > 1 {
-				conn.weight--
-			}
-			conn.Unlock()
-		}
+func (s *Container) AssignSender(seq uint32, conn *Connection) {
+	s.senders[int(seq)%len(s.senders)] = conn
+}
+
+func (s *Container) MarkFailed(seq uint32) {
+	if sender := s.senders[int(seq)%len(s.senders)]; sender != nil {
+		sender.weight -= 10
 	}
 }
 
@@ -248,7 +243,7 @@ func (s *Container) Close() {
 	defer s.Unlock()
 	for _, conn := range s.connections {
 		conn.Lock()
-		conn.conn.Close()
+		conn.UDPConn.Close()
 		conn.weight = 0
 		conn.Unlock()
 	}

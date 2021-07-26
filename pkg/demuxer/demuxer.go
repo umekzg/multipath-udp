@@ -88,14 +88,35 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 				sources[v.HandshakeSocketId()] = senderAddr
 				sourceLock.Unlock()
 			}
-		}
-		conn := container.ChooseUDPConn()
-		if conn == nil {
-			fmt.Printf("no connection to write to\n")
-			continue
-		}
-		if _, err := conn.Write(p.Marshal()); err != nil {
-			fmt.Printf("error writing to container %v\n", err)
+			// push control packets to all interfaces.
+			conns := container.UDPConns()
+			if len(conns) == 0 {
+				fmt.Printf("no connection to write to\n")
+				continue
+			}
+			for _, conn := range conns {
+				if _, err := conn.UDPConn.Write(p.Marshal()); err != nil {
+					fmt.Printf("error writing to container %v\n", err)
+				}
+			}
+		case *srt.DataPacket:
+			// check if this is a retransmission
+			if v.IsRetransmitted() {
+				container.MarkFailed(v.SequenceNumber())
+			}
+			// push data packets to weighted random interface.
+			conn := container.ChooseConnection()
+			if conn == nil {
+				fmt.Printf("no connection to write to\n")
+				continue
+			}
+			if _, err := conn.UDPConn.Write(p.Marshal()); err != nil {
+				fmt.Printf("error writing to container %v\n", err)
+			}
+			if !v.IsRetransmitted() {
+				// log the sender.
+				container.AssignSender(v.SequenceNumber(), conn)
+			}
 		}
 	}
 }
