@@ -59,8 +59,13 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 				fmt.Printf("unknown response destination socket id %d\n", msg.DestinationSocketId())
 				continue
 			}
+			switch v := msg.(type) {
+			case *srt.ControlPacket:
+				if v.ControlType() == srt.ControlTypeNak {
+					fmt.Printf("sending nak\n")
+				}
+			}
 			pkt := msg.Marshal()
-			fmt.Printf("%s <- %d\n", source.String(), len(pkt))
 			if _, err := r.WriteToUDP(pkt, source); err != nil {
 				fmt.Printf("error writing to source %v\n", source)
 			}
@@ -74,8 +79,6 @@ func (d *Demuxer) readLoop(listen, dial *net.UDPAddr) {
 			fmt.Printf("read failed %v\n", err)
 			break
 		}
-
-		fmt.Printf("%s -> %d\n", senderAddr.String(), n)
 
 		p, err := srt.Unmarshal(buf[:n])
 		if err != nil {
