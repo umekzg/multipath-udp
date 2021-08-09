@@ -13,7 +13,7 @@ func USBInterfaces(source func() ([]net.Interface, error)) func() ([]net.Interfa
 		}
 		var filtered []net.Interface
 		for _, iface := range ifaces {
-			if strings.HasPrefix(iface.Name, "usb") || iface.Name == "wlan1" {
+			if strings.HasPrefix(iface.Name, "usb") || (strings.HasPrefix(iface.Name, "wlan") && iface.Name != "wlan0") {
 				filtered = append(filtered, iface)
 			}
 		}
