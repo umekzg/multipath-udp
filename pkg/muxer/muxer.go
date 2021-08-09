@@ -75,7 +75,7 @@ func (m *Muxer) readLoop(listen, dial *net.UDPAddr) {
 			// blindly write to all udp sockets in connection group.
 			for _, source := range sources {
 				pkt := msg.Marshal()
-				fmt.Printf("%s -> %d", source.String(), len(pkt))
+				fmt.Printf("%s <- %d\n", source.String(), len(pkt))
 				if _, err := r.WriteToUDP(pkt, source); err != nil {
 					fmt.Printf("error writing to source %v\n", source)
 				}
@@ -93,7 +93,7 @@ READ:
 
 		saddr := senderAddr.String()
 
-		fmt.Printf("%s -> %d", saddr, n)
+		fmt.Printf("%s -> %d\n", saddr, n)
 
 		p, err := srt.Unmarshal(msg[:n])
 		if err != nil {
